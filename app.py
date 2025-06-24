@@ -8,9 +8,15 @@ from openpyxl.worksheet.protection import SheetProtection
 import re
 from io import BytesIO
 import uuid
+import secrets
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this'  # Cambia con una chiave segreta sicura
+# Genera una chiave segreta più robusta
+app.secret_key = secrets.token_hex(32)
+app.config['SESSION_COOKIE_SECURE'] = False  # Per sviluppo
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 ora
 
 DEFAULT_KEYS = {
     "test_scelto": None,
@@ -25,9 +31,14 @@ DEFAULT_KEYS = {
 }
 
 def initialize_session():
+    """Inizializza la sessione con controlli più robusti"""
+    session.permanent = True  # Rende la sessione permanente
     for key, default_value in DEFAULT_KEYS.items():
         if key not in session:
             session[key] = default_value
+    
+    # Forza il salvataggio della sessione
+    session.modified = True
 
 def get_logo_info(azienda_scelta=None):
     """Restituisce informazioni sul logo da utilizzare"""
@@ -231,6 +242,8 @@ def select_company():
     azienda_scelta = request.form.get('azienda')
     if azienda_scelta:
         session["azienda_scelta"] = azienda_scelta
+        session.permanent = True
+        session.modified = True
     return jsonify({'success': True})
 
 @app.route('/select_test', methods=['POST'])
@@ -238,6 +251,7 @@ def select_test():
     test_scelto = request.form.get('test')
     if test_scelto:
         session["test_scelto"] = test_scelto
+        session.permanent = True
         
         # Carica tipologie per ottenere il percorso del file
         try:
@@ -246,18 +260,20 @@ def select_test():
             file_row = df_tipologie[df_tipologie["Nome test"] == test_scelto]
             
             # Imposta tutte_domande
-            if "Tutte" in file_row.columns:
+            if "Tutte" in file_row.columns and len(file_row) > 0:
                 tutte_value = str(file_row["Tutte"].values[0]).strip().lower()
                 session["tutte_domande"] = tutte_value == "si"
             else:
                 session["tutte_domande"] = False
             
             # Imposta file_path
-            if "Percorso file" in file_row.columns:
+            if "Percorso file" in file_row.columns and len(file_row) > 0:
                 file_path = file_row["Percorso file"].values[0]
                 session["file_path"] = file_path
             else:
                 session["file_path"] = f"repository_test/{test_scelto}.xlsx"
+                
+            session.modified = True
                 
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
@@ -272,6 +288,8 @@ def set_user():
     
     session["utente"] = utente
     session["proseguito"] = True
+    session.permanent = True
+    session.modified = True
     return jsonify({'success': True})
 
 @app.route('/submit_answers', methods=['POST'])
@@ -445,6 +463,14 @@ def download_results():
 def reset():
     session.clear()
     return jsonify({'success': True})
+
+@app.route('/debug')
+def debug():
+    """Route per debug della sessione - RIMUOVI IN PRODUZIONE"""
+    return jsonify({
+        'session_data': dict(session),
+        'session_id': request.cookies.get('session', 'No session cookie')
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
