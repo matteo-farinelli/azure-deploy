@@ -295,24 +295,20 @@ def set_user():
 @app.route('/submit_answers', methods=['POST'])
 def submit_answers():
     try:
-        answers = request.json
+        data = request.json
+        answers = data.get('answers', {})
+        quiz_data = data.get('quiz_data', {})
         
-        # Controlla se la sessione è valida
-        if "domande_selezionate" not in session or session["domande_selezionate"] is None:
-            return jsonify({
-                'success': False, 
-                'error': 'Sessione scaduta. Ricarica la pagina e riprova il test.',
-                'reload': True
-            })
-        
-        domande = session["domande_selezionate"]
-        utente = session.get("utente", "")
-        azienda_scelta = session.get("azienda_scelta", "")
+        # Estrai i dati dal payload invece che dalla sessione
+        utente = quiz_data.get('utente', '')
+        azienda_scelta = quiz_data.get('azienda_scelta', '')
+        test_scelto = quiz_data.get('test_scelto', '')
+        domande = quiz_data.get('domande', [])
         
         if not domande:
             return jsonify({
                 'success': False, 
-                'error': 'Nessuna domanda trovata nella sessione. Ricarica la pagina.',
+                'error': 'Nessuna domanda trovata. Ricarica la pagina.',
                 'reload': True
             })
         
@@ -342,7 +338,7 @@ def submit_answers():
                     "Risposta": user_answer,
                     "Corretta": None,
                     "Esatta": None,
-                    "Test": session.get("test_scelto", "")
+                    "Test": test_scelto
                 })
             else:
                 # Domanda chiusa
@@ -373,11 +369,16 @@ def submit_answers():
                     "Risposta": risposta_str,
                     "Corretta": corretta_raw,
                     "Esatta": is_correct,
-                    "Test": session.get("test_scelto", "")
+                    "Test": test_scelto
                 })
         
+        # Salva i risultati nella sessione per il download
         session["submitted"] = True
         session["risposte"] = risposte
+        session["utente"] = utente
+        session["azienda_scelta"] = azienda_scelta
+        session["test_scelto"] = test_scelto
+        session.modified = True
         
         # Calcola punteggio
         df_r = pd.DataFrame(risposte)
@@ -390,7 +391,15 @@ def submit_answers():
             'success': True, 
             'score': perc,
             'correct': n_cor,
-            'total': n_tot
+            'total': n_tot,
+            'results_data': {
+                'utente': utente,
+                'azienda': azienda_scelta,
+                'test': test_scelto,
+                'score': perc,
+                'correct': n_cor,
+                'total': n_tot
+            }
         })
         
     except Exception as e:
