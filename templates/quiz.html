@@ -186,11 +186,23 @@ $(document).ready(function() {
         }
         
         // Prepara i dati del quiz (per evitare problemi di sessione)
+        // Converte le domande dal formato template al formato originale pandas
+        const originalDomande = {{ domande | tojson }};
+        const convertedDomande = originalDomande.map(function(domanda) {
+            return {
+                'Domanda': domanda.domanda,
+                'principio': domanda.principio,
+                'opzione 1': domanda.opzioni && domanda.opzioni.length > 0 ? domanda.opzioni[0] : null,
+                'Corretta': domanda.corretta,
+                'tipo': domanda.tipo
+            };
+        });
+        
         const quizData = {
             utente: '{{ utente }}',
             azienda_scelta: '{{ azienda }}',
             test_scelto: '{{ test_name }}',
-            domande: {{ domande | tojson }}
+            domande: convertedDomande
         };
         
         const payload = {
