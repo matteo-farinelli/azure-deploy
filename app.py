@@ -325,16 +325,16 @@ def submit_answers():
             answer_key = f'question_{idx}'
             user_answer = answers.get(answer_key, '')
             
-            # Gestisci valori None
+            # Gestisci valori None - ora row è un dizionario
             opzione_1 = row.get("opzione 1")
-            if opzione_1 is None or pd.isna(opzione_1) or str(opzione_1).lower() == 'nan':
+            if opzione_1 is None or str(opzione_1).lower() in ['nan', 'none', '', 'null']:
                 # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
                     "Azienda": azienda_scelta,
                     "Utente": utente,
-                    "Domanda": row["Domanda"],
-                    "Argomento": row["principio"],
+                    "Domanda": row.get("Domanda", ""),
+                    "Argomento": row.get("principio", ""),
                     "Risposta": user_answer,
                     "Corretta": None,
                     "Esatta": None,
@@ -343,7 +343,7 @@ def submit_answers():
             else:
                 # Domanda chiusa
                 corretta_raw = row.get("Corretta", "")
-                if corretta_raw is None or pd.isna(corretta_raw):
+                if corretta_raw is None:
                     corretta_raw = ""
                 
                 corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
@@ -364,8 +364,8 @@ def submit_answers():
                     "Tipo": "chiusa",
                     "Azienda": azienda_scelta,
                     "Utente": utente,
-                    "Domanda": row["Domanda"],
-                    "Argomento": row["principio"],
+                    "Domanda": row.get("Domanda", ""),
+                    "Argomento": row.get("principio", ""),
                     "Risposta": risposta_str,
                     "Corretta": corretta_raw,
                     "Esatta": is_correct,
