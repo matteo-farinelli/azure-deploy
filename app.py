@@ -171,7 +171,7 @@ def show_quiz():
             else:
                 domande_selezionate = (
                     df_filtrato.groupby("principio", group_keys=False)
-                               .apply(lambda x: x.sample(n=min(2, len(x))))
+                               .apply(lambda x: x.sample(n=min(2, len(x)), random_state=42))
                                .reset_index(drop=True)
                 )
             session["domande_selezionate"] = domande_selezionate.to_dict('records')
@@ -180,12 +180,14 @@ def show_quiz():
         
         # Prepara dati per il template
         domande_formatted = []
+        option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
+        
         for idx, row in enumerate(domande):
             domanda_data = {
                 'id': idx,
                 'domanda': row['Domanda'],
                 'principio': row['principio'],
-                'tipo': 'aperta' if pd.isna(row.get("opzione 1")) else 'chiusa',
+                'tipo': 'aperta' if pd.isna(row.get("opzione 1")) or row.get("opzione 1") is None else 'chiusa',
                 'opzioni': [],
                 'corretta': row.get('Corretta', ''),
                 'multiple': False
@@ -194,11 +196,15 @@ def show_quiz():
             if domanda_data['tipo'] == 'chiusa':
                 opzioni = []
                 for col in option_cols:
-                    if col in row and pd.notna(row[col]):
+                    if col in row and row[col] is not None and pd.notna(row[col]) and str(row[col]).strip():
                         opzioni.append(str(row[col]))
                 domanda_data['opzioni'] = opzioni
                 
-                corrette = [c.strip() for c in str(row["Corretta"]).split(";")]
+                corretta_raw = row.get("Corretta", "")
+                if corretta_raw is None or pd.isna(corretta_raw):
+                    corretta_raw = ""
+                
+                corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
                 domanda_data['multiple'] = len(corrette) > 1
             
             domande_formatted.append(domanda_data)
@@ -276,13 +282,18 @@ def submit_answers():
         utente = session["utente"]
         azienda_scelta = session["azienda_scelta"]
         
+        if not domande:
+            return jsonify({'success': False, 'error': 'Nessuna domanda trovata nella sessione'})
+        
         risposte = []
         
         for idx, row in enumerate(domande):
             answer_key = f'question_{idx}'
             user_answer = answers.get(answer_key, '')
             
-            if pd.isna(row.get("opzione 1")):
+            # Gestisci valori None
+            opzione_1 = row.get("opzione 1")
+            if opzione_1 is None or pd.isna(opzione_1) or str(opzione_1).lower() == 'nan':
                 # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
@@ -297,16 +308,22 @@ def submit_answers():
                 })
             else:
                 # Domanda chiusa
-                corrette = [c.strip() for c in str(row["Corretta"]).split(";")]
+                corretta_raw = row.get("Corretta", "")
+                if corretta_raw is None or pd.isna(corretta_raw):
+                    corretta_raw = ""
+                
+                corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
                 
                 if len(corrette) > 1:
                     # Risposta multipla
-                    user_answers = user_answer if isinstance(user_answer, list) else [user_answer]
+                    user_answers = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
+                    # Filtra risposte vuote
+                    user_answers = [ans for ans in user_answers if ans]
                     is_correct = set(user_answers) == set(corrette)
                     risposta_str = ";".join(user_answers)
                 else:
                     # Risposta singola
-                    is_correct = user_answer == corrette[0]
+                    is_correct = user_answer in corrette if corrette else False
                     risposta_str = user_answer
                 
                 risposte.append({
@@ -316,7 +333,7 @@ def submit_answers():
                     "Domanda": row["Domanda"],
                     "Argomento": row["principio"],
                     "Risposta": risposta_str,
-                    "Corretta": row["Corretta"],
+                    "Corretta": corretta_raw,
                     "Esatta": is_correct,
                     "Test": session["test_scelto"]
                 })
@@ -328,8 +345,8 @@ def submit_answers():
         df_r = pd.DataFrame(risposte)
         chiuse = df_r[df_r["Tipo"] == "chiusa"]
         n_tot = len(chiuse)
-        n_cor = int(chiuse["Esatta"].sum()) if n_tot else 0
-        perc = int(n_cor / n_tot * 100) if n_tot else 0
+        n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
+        perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
         return jsonify({
             'success': True, 
@@ -339,7 +356,12 @@ def submit_answers():
         })
         
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        # Log dell'errore più dettagliato
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Errore in submit_answers: {error_details}")
+        return jsonify({'success': False, 'error': f'Errore del server: {str(e)}'})
+
 
 @app.route('/download_results')
 def download_results():
