@@ -190,8 +190,13 @@ $(document).ready(function() {
                     // Ricarica la pagina per mostrare i risultati
                     window.location.reload();
                 } else {
-                    alert('Errore nell\'invio delle risposte: ' + (response.error || 'Errore sconosciuto'));
-                    $('button[type="submit"]').prop('disabled', false);
+                    if (response.reload) {
+                        alert(response.error + '\n\nLa pagina verrà ricaricata.');
+                        window.location.reload();
+                    } else {
+                        alert('Errore nell\'invio delle risposte: ' + (response.error || 'Errore sconosciuto'));
+                        $('button[type="submit"]').prop('disabled', false);
+                    }
                 }
             },
             error: function() {
