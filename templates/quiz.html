@@ -77,7 +77,7 @@
     </div>
     
     <div id="score-display" class="alert alert-success">
-        <!-- Il punteggio verrà mostrato qui via JavaScript -->
+        <!-- Il punteggio verrà mostrato qui via JavaScript o dal server -->
     </div>
     
     <div style="margin-top: 20px;">
@@ -90,6 +90,21 @@
         </button>
     </div>
 </div>
+
+<script>
+// Carica i risultati dal localStorage se disponibili
+$(document).ready(function() {
+    const results = localStorage.getItem('quiz_results');
+    if (results) {
+        const data = JSON.parse(results);
+        $('#score-display').html(
+            `<strong>Punteggio finale: ${data.correct} su ${data.total} (${data.score}%)</strong>`
+        );
+        // Pulisci il localStorage
+        localStorage.removeItem('quiz_results');
+    }
+});
+</script>
 {% endif %}
 
 <div class="loading" id="loading">
@@ -170,6 +185,19 @@ $(document).ready(function() {
             answers[name] = values;
         }
         
+        // Prepara i dati del quiz (per evitare problemi di sessione)
+        const quizData = {
+            utente: '{{ utente }}',
+            azienda_scelta: '{{ azienda }}',
+            test_scelto: '{{ test_name }}',
+            domande: {{ domande | tojson }}
+        };
+        
+        const payload = {
+            answers: answers,
+            quiz_data: quizData
+        };
+        
         $('#loading').addClass('show');
         $('button[type="submit"]').prop('disabled', true);
         
@@ -177,11 +205,14 @@ $(document).ready(function() {
             url: '/submit_answers',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify(answers),
+            data: JSON.stringify(payload),
             success: function(response) {
                 $('#loading').removeClass('show');
                 
                 if (response.success) {
+                    // Salva i risultati nel localStorage per la pagina risultati
+                    localStorage.setItem('quiz_results', JSON.stringify(response.results_data));
+                    
                     // Mostra il punteggio
                     $('#score-display').html(
                         `<strong>Punteggio finale: ${response.correct} su ${response.total} (${response.score}%)</strong>`
