@@ -278,12 +278,32 @@ def set_user():
 def submit_answers():
     try:
         answers = request.json
+        
+        # Controlla se la sessione è valida
+        if "domande_selezionate" not in session or session["domande_selezionate"] is None:
+            return jsonify({
+                'success': False, 
+                'error': 'Sessione scaduta. Ricarica la pagina e riprova il test.',
+                'reload': True
+            })
+        
         domande = session["domande_selezionate"]
-        utente = session["utente"]
-        azienda_scelta = session["azienda_scelta"]
+        utente = session.get("utente", "")
+        azienda_scelta = session.get("azienda_scelta", "")
         
         if not domande:
-            return jsonify({'success': False, 'error': 'Nessuna domanda trovata nella sessione'})
+            return jsonify({
+                'success': False, 
+                'error': 'Nessuna domanda trovata nella sessione. Ricarica la pagina.',
+                'reload': True
+            })
+        
+        if not utente or not azienda_scelta:
+            return jsonify({
+                'success': False, 
+                'error': 'Dati utente mancanti. Ricarica la pagina e riprova.',
+                'reload': True
+            })
         
         risposte = []
         
@@ -304,7 +324,7 @@ def submit_answers():
                     "Risposta": user_answer,
                     "Corretta": None,
                     "Esatta": None,
-                    "Test": session["test_scelto"]
+                    "Test": session.get("test_scelto", "")
                 })
             else:
                 # Domanda chiusa
@@ -335,7 +355,7 @@ def submit_answers():
                     "Risposta": risposta_str,
                     "Corretta": corretta_raw,
                     "Esatta": is_correct,
-                    "Test": session["test_scelto"]
+                    "Test": session.get("test_scelto", "")
                 })
         
         session["submitted"] = True
@@ -360,7 +380,11 @@ def submit_answers():
         import traceback
         error_details = traceback.format_exc()
         print(f"Errore in submit_answers: {error_details}")
-        return jsonify({'success': False, 'error': f'Errore del server: {str(e)}'})
+        return jsonify({
+            'success': False, 
+            'error': f'Errore del server: {str(e)}',
+            'reload': True
+        })
 
 
 @app.route('/download_results')
