@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}{{ test_name }} - Assessment Platform{% endblock %}
+
+{% block content %}
+<div class="alert alert-success">
+    Test '{{ test_name }}' caricato correttamente!
+</div>
+
+{% if not proseguito %}
+<h3>Inserisci i tuoi dati</h3>
+<form id="userForm">
+    <div class="form-group">
+        <label for="utente">Cognome e Nome (es. Rossi Mario):</label>
+        <input type="text" id="utente" name="utente" class="form-control" 
+               value="{{ utente }}" required {% if submitted %}disabled{% endif %}>
+    </div>
+    
+    <button type="submit" class="btn" {% if submitted %}disabled{% endif %}>Prosegui</button>
+</form>
+{% endif %}
+
+{% if proseguito and not submitted %}
+<h3>Rispondi alle seguenti domande:</h3>
+
+<form id="quiz
