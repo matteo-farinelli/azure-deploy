@@ -23,4 +23,184 @@
 {% if proseguito and not submitted %}
 <h3>Rispondi alle seguenti domande:</h3>
 
-<form id="quiz
+<form id="quizForm">
+    {% for domanda in domande %}
+    <div class="question-block">
+        <div class="question-title">{{ domanda.domanda }}</div>
+        <div class="question-subtitle">Argomento: {{ domanda.principio }}</div>
+        
+        {% if domanda.tipo == 'aperta' %}
+        <div class="form-group">
+            <textarea name="question_{{ domanda.id }}" id="question_{{ domanda.id }}" 
+                     class="form-control" rows="3" placeholder="Inserisci la tua risposta..."
+                     {% if submitted %}disabled{% endif %}></textarea>
+        </div>
+        {% else %}
+            {% if domanda.multiple %}
+            <div class="checkbox-group">
+                <small class="question-subtitle">(Risposte multiple)</small>
+                {% for opzione in domanda.opzioni %}
+                <div class="checkbox-option">
+                    <label>
+                        <input type="checkbox" name="question_{{ domanda.id }}" 
+                               value="{{ opzione }}" {% if submitted %}disabled{% endif %}>
+                        {{ opzione }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="radio-group">
+                {% for opzione in domanda.opzioni %}
+                <div class="radio-option">
+                    <label>
+                        <input type="radio" name="question_{{ domanda.id }}" 
+                               value="{{ opzione }}" {% if submitted %}disabled{% endif %}>
+                        {{ opzione }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <button type="submit" class="btn" {% if submitted %}disabled{% endif %}>Invia Risposte</button>
+</form>
+{% endif %}
+
+{% if submitted %}
+<div id="results">
+    <div class="alert alert-success">
+        <strong>Risposte inviate con successo!</strong>
+    </div>
+    
+    <div id="score-display" class="alert alert-success">
+        <!-- Il punteggio verrà mostrato qui via JavaScript -->
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <a href="/download_results" class="btn" style="text-decoration: none; display: inline-block;">
+            Scarica il file Excel con le risposte
+        </a>
+        
+        <button onclick="window.location.href='/?reset=true'" class="btn" style="margin-left: 10px;">
+            Fai un altro test
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<div class="loading" id="loading">
+    <p>Elaborazione in corso...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Form utente
+    $('#userForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const utente = $('#utente').val().trim();
+        if (!utente) {
+            alert('Per favore, inserisci il tuo nome prima di proseguire.');
+            return;
+        }
+        
+        $('#loading').addClass('show');
+        $('button[type="submit"]').prop('disabled', true);
+        
+        $.ajax({
+            url: '/set_user',
+            method: 'POST',
+            data: {
+                utente: utente
+            },
+            success: function(response) {
+                if (response.success) {
+                    window.location.reload();
+                } else {
+                    alert(response.error || 'Errore nell\'inserimento del nome');
+                    $('#loading').removeClass('show');
+                    $('button[type="submit"]').prop('disabled', false);
+                }
+            },
+            error: function() {
+                alert('Errore di connessione');
+                $('#loading').removeClass('show');
+                $('button[type="submit"]').prop('disabled', false);
+            }
+        });
+    });
+    
+    // Form quiz
+    $('#quizForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Raccogli tutte le risposte
+        const answers = {};
+        
+        // Domande aperte (textarea)
+        $('textarea[name^="question_"]').each(function() {
+            const name = $(this).attr('name');
+            answers[name] = $(this).val();
+        });
+        
+        // Domande a risposta singola (radio)
+        $('input[type="radio"]:checked').each(function() {
+            const name = $(this).attr('name');
+            answers[name] = $(this).val();
+        });
+        
+        // Domande a risposta multipla (checkbox)
+        const checkboxGroups = {};
+        $('input[type="checkbox"]:checked').each(function() {
+            const name = $(this).attr('name');
+            if (!checkboxGroups[name]) {
+                checkboxGroups[name] = [];
+            }
+            checkboxGroups[name].push($(this).val());
+        });
+        
+        // Aggiungi le risposte multiple all'oggetto answers
+        for (const [name, values] of Object.entries(checkboxGroups)) {
+            answers[name] = values;
+        }
+        
+        $('#loading').addClass('show');
+        $('button[type="submit"]').prop('disabled', true);
+        
+        $.ajax({
+            url: '/submit_answers',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(answers),
+            success: function(response) {
+                $('#loading').removeClass('show');
+                
+                if (response.success) {
+                    // Mostra il punteggio
+                    $('#score-display').html(
+                        `<strong>Punteggio finale: ${response.correct} su ${response.total} (${response.score}%)</strong>`
+                    );
+                    
+                    // Ricarica la pagina per mostrare i risultati
+                    window.location.reload();
+                } else {
+                    alert('Errore nell\'invio delle risposte: ' + (response.error || 'Errore sconosciuto'));
+                    $('button[type="submit"]').prop('disabled', false);
+                }
+            },
+            error: function() {
+                alert('Errore di connessione');
+                $('#loading').removeClass('show');
+                $('button[type="submit"]').prop('disabled', false);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
