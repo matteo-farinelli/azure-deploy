@@ -2,3 +2,6 @@ Flask
 pandas
 openpyxl
 gunicorn
+Werkzeug==3.0.1
+Jinja2==3.1.4
+--only-binary=all
