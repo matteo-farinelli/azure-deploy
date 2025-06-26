@@ -17,7 +17,22 @@ app.config['SESSION_COOKIE_SECURE'] = False  # Per sviluppo
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 ora
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # Rinnova la sessione ad ogni richiesta
 
+@app.before_request
+def make_session_permanent():
+    """Rende la sessione permanente per ogni richiesta"""
+    session.permanent = True
+    session.modified = True
+
+# Aggiungi questo middleware per debug
+@app.after_request
+def after_request(response):
+    """Debug delle sessioni"""
+    if request.endpoint and request.endpoint != 'static':
+        print(f"DEBUG - After request {request.endpoint}: Session keys = {list(session.keys())}")
+    return response
+    
 DEFAULT_KEYS = {
     "test_scelto": None,
     "azienda_scelta": None,
