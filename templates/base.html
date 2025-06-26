@@ -9,82 +9,151 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: {% if company_color %}{{ company_color }}{% else %}#F63366{% endif %};
+            --primary-color: {% if company_color %}{{ company_color }}{% else %}#6C757D{% endif %};
         }
-        
+    
         body {
-            background: linear-gradient(135deg, var(--primary-color), #ffffff);
+            /* Sfondi più soft e eleganti */
+            background: {% if azienda == 'auxiell' %}
+                linear-gradient(135deg, #6C757D, #F8F9FA);
+            {% elif azienda == 'euxilia' %}
+                linear-gradient(135deg, #4A90C2, #E3F2FD);
+            {% elif azienda == 'xva' %}
+                linear-gradient(135deg, #D4AF37, #FFF8E1);
+            {% else %}
+                linear-gradient(135deg, #6C757D, #F8F9FA);
+            {% endif %}
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
+    
         .auth-container {
             max-width: 400px;
             margin: 0 auto;
             padding: 2rem;
             margin-top: 10vh;
         }
-        
+    
         .auth-card {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             padding: 2rem;
+            backdrop-filter: blur(10px);
         }
-        
+    
         .dashboard-card {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             padding: 1.5rem;
             margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
         }
-        
+    
         .btn-primary {
             background-color: var(--primary-color);
             border-color: var(--primary-color);
             border-radius: 25px;
             padding: 12px 30px;
             font-weight: 600;
+            transition: all 0.3s ease;
         }
-        
+    
         .btn-primary:hover {
             background-color: var(--primary-color);
-            opacity: 0.9;
+            opacity: 0.85;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
-        
+    
         .form-control {
             border-radius: 15px;
             padding: 12px 18px;
             border: 2px solid #e9ecef;
+            transition: border-color 0.3s ease;
         }
-        
+    
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+        }
+    
         .navbar {
-            background-color: var(--primary-color) !important;
+                background: {% if azienda == 'auxiell' %}
+                    linear-gradient(90deg, #6C757D, #5A6268) !important;
+            {% elif azienda == 'euxilia' %}
+                linear-gradient(90deg, #4A90C2, #357ABD) !important;
+            {% elif azienda == 'xva' %}
+                linear-gradient(90deg, #D4AF37, #B8941F) !important;
+            {% else %}
+                linear-gradient(90deg, #6C757D, #5A6268) !important;
+            {% endif %}
+            backdrop-filter: blur(10px);
         }
-        
+    
         .test-card {
             border-left: 4px solid var(--primary-color);
-            transition: transform 0.3s ease;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
         }
-        
+    
         .test-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
         }
-        
-        .test-completed { border-left-color: #28a745; }
-        .test-pending { border-left-color: #ffc107; }
-        
+    
+        .test-completed { 
+            border-left-color: #28a745;
+            background: rgba(40, 167, 69, 0.05);
+        }
+    
+        .test-pending { 
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.05);
+        }
+    
         .stats-card {
-            background: linear-gradient(135deg, var(--primary-color), rgba(246, 51, 102, 0.8));
+            background: {% if azienda == 'auxiell' %}
+                linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
+            {% elif azienda == 'euxilia' %}
+                linear-gradient(135deg, #4A90C2, rgba(74, 144, 194, 0.9));
+            {% elif azienda == 'xva' %}
+                linear-gradient(135deg, #D4AF37, rgba(212, 175, 55, 0.9));
+            {% else %}
+                linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
+            {% endif %}
             color: white;
             border-radius: 15px;
             padding: 1.5rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
         }
-        
+    
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+    
         .stats-number {
             font-size: 2.5rem;
             font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    
+        .alert {
+            border-radius: 15px;
+            border: none;
+            backdrop-filter: blur(10px);
+        }
+    
+        .card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+    
+        .badge {
+            border-radius: 10px;
         }
     </style>
 </head>
