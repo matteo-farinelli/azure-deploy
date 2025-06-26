@@ -329,27 +329,86 @@ def show_quiz():
 
 @app.route('/submit_answers', methods=['POST'])
 @require_login
+@app.route('/submit_answers', methods=['POST'])
+@require_login
 def submit_answers():
     try:
         data = request.json
         answers = data.get('answers', {})
         
         # Estrai i dati dalla sessione
-        user_name = session["user_name"]
-        azienda_scelta = session["user_company"]
-        test_scelto = session["test_scelto"]
+        user_name = session.get("user_name")
+        azienda_scelta = session.get("user_company")
+        test_scelto = session.get("test_scelto")
+        user_id = session.get("user_id")
         domande = session.get("domande_selezionate")
         
         # Debug: log delle informazioni di sessione
-        print(f"Debug - User: {user_name}, Company: {azienda_scelta}, Test: {test_scelto}")
-        print(f"Debug - Domande nella sessione: {len(domande) if domande else 'None'}")
+        print(f"DEBUG - User: {user_name}, Company: {azienda_scelta}, Test: {test_scelto}")
+        print(f"DEBUG - UserID: {user_id}")
+        print(f"DEBUG - Domande nella sessione: {len(domande) if domande else 'None'}")
+        print(f"DEBUG - Session keys: {list(session.keys())}")
         
-        if not domande:
+        # Validazioni più robuste
+        if not user_name or not azienda_scelta or not test_scelto or not user_id:
             return jsonify({
                 'success': False, 
-                'error': 'Nessuna domanda trovata nella sessione. Ricarica la pagina e riprova il test.',
-                'reload': True
+                'error': 'Dati utente mancanti nella sessione. Effettua nuovamente il login.',
+                'redirect': '/login'
             })
+        
+        if not domande:
+            # Prova a ricaricare le domande dal file se non sono in sessione
+            try:
+                print("DEBUG - Tentativo di ricarica domande dal file...")
+                file_path = session.get("file_path")
+                if not file_path:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Percorso del file di test non trovato. Riavvia il test.',
+                        'redirect': '/dashboard'
+                    })
+                
+                # Ricarica le domande dal file
+                df = pd.read_excel(file_path)
+                df_filtrato = df[df["Azienda"] == azienda_scelta]
+                
+                if df_filtrato.empty:
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Nessuna domanda trovata per l\'azienda {azienda_scelta}.',
+                        'redirect': '/dashboard'
+                    })
+                
+                # Rigenera le domande selezionate
+                tutte_domande = session.get("tutte_domande", False)
+                if tutte_domande:
+                    domande_selezionate = df_filtrato.reset_index(drop=True)
+                else:
+                    domande_selezionate = (
+                        df_filtrato.groupby("principio", group_keys=False)
+                                   .apply(lambda x: x.sample(n=min(2, len(x)), random_state=42))
+                                   .reset_index(drop=True)
+                    )
+                
+                domande = domande_selezionate.to_dict('records')
+                
+                # Salva nuovamente in sessione
+                session["domande_selezionate"] = domande
+                session.modified = True
+                
+                print(f"DEBUG - Domande ricaricate dal file: {len(domande)}")
+                
+            except Exception as e:
+                print(f"DEBUG - Errore nel ricaricamento domande: {e}")
+                return jsonify({
+                    'success': False, 
+                    'error': 'Impossibile ricaricare le domande del test. Riavvia il test dalla dashboard.',
+                    'redirect': '/dashboard'
+                })
+        
+        # Verifica che il numero di risposte corrisponda al numero di domande
+        print(f"DEBUG - Numero domande: {len(domande)}, Numero risposte: {len(answers)}")
         
         risposte = []
         
@@ -365,7 +424,7 @@ def submit_answers():
                     "Tipo": "aperta",
                     "Azienda": ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
                     "Utente": user_name,
-                    "UserID": session["user_id"],
+                    "UserID": user_id,
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": user_answer,
@@ -396,7 +455,7 @@ def submit_answers():
                     "Tipo": "chiusa",
                     "Azienda": ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
                     "Utente": user_name,
-                    "UserID": session["user_id"],
+                    "UserID": user_id,
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": risposta_str,
@@ -405,6 +464,8 @@ def submit_answers():
                     "Test": test_scelto
                 })
         
+        print(f"DEBUG - Risposte elaborate: {len(risposte)}")
+        
         # Calcola punteggio
         df_r = pd.DataFrame(risposte)
         chiuse = df_r[df_r["Tipo"] == "chiusa"]
@@ -412,8 +473,9 @@ def submit_answers():
         n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
         perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
+        print(f"DEBUG - Punteggio calcolato: {n_cor}/{n_tot} = {perc}%")
+        
         # Salva i risultati nel database utente
-        user_id = session["user_id"]
         results = load_user_results()
         
         if user_id not in results:
@@ -427,12 +489,14 @@ def submit_answers():
             'total_questions': n_tot,
             'completed_at': datetime.now().isoformat(),
             'user_name': user_name,
-            'user_id': session["user_id"],
+            'user_id': user_id,
             'answers': risposte
         }
         
         results[user_id].append(test_result)
         save_user_results(results)
+        
+        print(f"DEBUG - Risultati salvati per user_id: {user_id}")
         
         # Salva i risultati nella sessione per il download
         session["submitted"] = True
@@ -461,9 +525,23 @@ def submit_answers():
         return jsonify({
             'success': False, 
             'error': f'Errore del server: {str(e)}',
-            'reload': True
+            'redirect': '/dashboard'
         })
 
+
+# Aggiungi anche questa funzione per migliorare la gestione delle sessioni
+@app.route('/check_session', methods=['GET'])
+@require_login
+def check_session():
+    """Endpoint per verificare lo stato della sessione"""
+    return jsonify({
+        'success': True,
+        'user_id': session.get('user_id'),
+        'user_name': session.get('user_name'),
+        'test_scelto': session.get('test_scelto'),
+        'has_questions': session.get('domande_selezionate') is not None,
+        'session_keys': list(session.keys())
+    })
 @app.route('/download_results')
 @require_login
 def download_results():
