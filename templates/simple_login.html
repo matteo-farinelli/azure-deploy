@@ -13,8 +13,6 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -43,33 +41,6 @@
             margin-bottom: 10px;
         }
         
-        .logo-section p {
-            color: #666;
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
-        
-        .test-mode-notice {
-            background: #e3f2fd;
-            border: 2px solid #2196f3;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 25px;
-            text-align: center;
-        }
-        
-        .test-mode-notice h3 {
-            color: #1976d2;
-            margin-bottom: 8px;
-            font-size: 16px;
-        }
-        
-        .test-mode-notice p {
-            color: #1565c0;
-            font-size: 14px;
-            margin: 0;
-        }
-        
         .form-group {
             margin-bottom: 20px;
         }
@@ -87,12 +58,6 @@
             border: 2px solid #e1e1e1;
             border-radius: 5px;
             font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-control:focus {
-            outline: none;
-            border-color: #667eea;
         }
         
         .company-grid {
@@ -132,17 +97,6 @@
             background: #667eea;
             color: white;
             border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        
-        .company-option label:hover {
-            background: #e9ecef;
-            transform: translateY(-1px);
-        }
-        
-        .company-option input[type="radio"]:checked + label:hover {
-            background: #5a6fd8;
         }
         
         .btn {
@@ -153,20 +107,7 @@
             border: none;
             border-radius: 5px;
             font-size: 16px;
-            font-weight: 500;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
         }
         
         .alert {
@@ -187,69 +128,6 @@
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        
-        .help-section {
-            margin-top: 25px;
-            padding-top: 20px;
-            border-top: 1px solid #e1e1e1;
-            text-align: center;
-        }
-        
-        .help-section h4 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .help-section p {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-        
-        .features-list {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        
-        .features-list h4 {
-            color: #333;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        
-        .features-list ul {
-            list-style: none;
-            padding: 0;
-        }
-        
-        .features-list li {
-            padding: 5px 0;
-            color: #555;
-            position: relative;
-            padding-left: 20px;
-        }
-        
-        .features-list li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #28a745;
-            font-weight: bold;
-        }
-        
-        @media (max-width: 480px) {
-            .login-container {
-                padding: 25px;
-                margin: 10px;
-            }
-            
-            .company-grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body>
@@ -257,11 +135,6 @@
         <div class="logo-section">
             <h1>🎯 Assessment Platform</h1>
             <p>Sistema di valutazione aziendale</p>
-        </div>
-        
-        <div class="test-mode-notice">
-            <h3>🧪 Modalità Test</h3>
-            <p>Versione semplificata senza autenticazione Azure AD per test e sviluppo</p>
         </div>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -274,7 +147,7 @@
             {% endif %}
         {% endwith %}
         
-        <form method="POST" id="loginForm">
+        <form method="POST">
             <div class="form-group">
                 <label for="name">Nome e Cognome:</label>
                 <input type="text" id="name" name="name" class="form-control" 
@@ -295,64 +168,6 @@
             
             <button type="submit" class="btn">🚀 Accedi alla Dashboard</button>
         </form>
-        
-        <div class="features-list">
-            <h4>✨ Funzionalità Disponibili</h4>
-            <ul>
-                <li>Dashboard personalizzata per utente</li>
-                <li>Tracking progressi test completati</li>
-                <li>Download risultati in Excel</li>
-                <li>Storico completo delle valutazioni</li>
-                <li>Interface responsive e moderna</li>
-            </ul>
-        </div>
-        
-        <div class="help-section">
-            <h4>ℹ️ Come Funziona</h4>
-            <p>Inserisci il tuo nome e seleziona l'azienda</p>
-            <p>Accederai alla dashboard con i test disponibili</p>
-            <p>I tuoi progressi verranno salvati automaticamente</p>
-        </div>
     </div>
-
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            const name = document.getElementById('name').value.trim();
-            const company = document.querySelector('input[name="company"]:checked');
-            
-            if (!name) {
-                e.preventDefault();
-                alert('Per favore, inserisci il tuo nome');
-                return;
-            }
-            
-            if (name.length < 2) {
-                e.preventDefault();
-                alert('Il nome deve essere di almeno 2 caratteri');
-                return;
-            }
-            
-            if (!company) {
-                e.preventDefault();
-                alert('Per favore, seleziona un\'azienda');
-                return;
-            }
-        });
-        
-        // Aggiungi animazioni alle opzioni azienda
-        document.querySelectorAll('.company-option input[type="radio"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                // Rimuovi selezione precedente
-                document.querySelectorAll('.company-option label').forEach(label => {
-                    label.style.transform = '';
-                });
-                
-                // Anima la selezione corrente
-                if (this.checked) {
-                    this.nextElementSibling.style.transform = 'translateY(-2px)';
-                }
-            });
-        });
-    </script>
 </body>
 </html>
