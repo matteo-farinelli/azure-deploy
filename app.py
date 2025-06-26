@@ -98,12 +98,27 @@ def require_login(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
+# ===== ROUTES =====
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    """Route home che gestisce sia GET che POST"""
+    # Se l'utente è già loggato, vai alla dashboard
+    if 'user_id' in session and session['user_id'] is not None:
+        return redirect(url_for('dashboard'))
+    
+    # Altrimenti, gestisci come login
+    return login()
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Pagina di login semplificata"""
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         company = request.form.get('company', '').strip().lower()
+        
+        # Debug: stampa i dati ricevuti
+        print(f"DEBUG - Login attempt: name='{name}', company='{company}'")
         
         # Validazioni base
         if not name or not company:
@@ -128,9 +143,12 @@ def login():
         session.permanent = True
         session.modified = True
         
+        print(f"DEBUG - Login successful for: {user_id}")
+        
         flash(f'Benvenuto, {name}!', 'success')
         return redirect(url_for('dashboard'))
     
+    # GET request
     return render_template('simple_login.html', companies=ALLOWED_COMPANIES)
 
 @app.route('/logout')
@@ -140,7 +158,7 @@ def logout():
     flash('Logout effettuato con successo', 'success')
     return redirect(url_for('login'))
 
-@app.route('/')
+@app.route('/dashboard')
 @require_login
 def dashboard():
     """Dashboard utente con test completati e da fare"""
