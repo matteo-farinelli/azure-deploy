@@ -65,5 +65,3 @@ jobs:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         slot-name: 'Production'
         publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_YOURSECRETKEY }}
-
----
