@@ -10,8 +10,6 @@ from io import BytesIO
 import uuid
 import secrets
 import json
-import requests
-from urllib.parse import urlencode
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -19,17 +17,6 @@ app.config['SESSION_COOKIE_SECURE'] = False  # Per sviluppo
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 ora
-
-# Configurazione Azure AD
-AZURE_AD_CONFIG = {
-    'CLIENT_ID': '12345678-1234-1234-1234-123456789012',  # DA CONFIGURARE
-    'CLIENT_SECRET': 'your-client-secret-here',  # DA CONFIGURARE
-    'TENANT_ID': 'your-tenant-id-here',  # DA CONFIGURARE
-    'AUTHORITY': 'https://login.microsoftonline.com/your-tenant-id-here',
-    'REDIRECT_URI': 'https://vericaconoscenze-b8hbaagxakbwdrbr.italynorth-01.azurewebsites.net/auth/callback',
-    'SCOPE': ['openid', 'profile', 'email', 'User.Read'],
-    'ALLOWED_DOMAINS': ['auxiell.com', 'euxilia.com', 'xva.com']  # Domini aziendali permessi
-}
 
 DEFAULT_KEYS = {
     "test_scelto": None,
@@ -43,12 +30,18 @@ DEFAULT_KEYS = {
     "file_path": None,
     "user_id": None,
     "user_name": None,
-    "user_email": None,
     "user_company": None
 }
 
 # File per salvare i dati utenti
 RESULTS_FILE = "data/user_results.json"
+
+# Aziende e domini permessi (per test)
+ALLOWED_COMPANIES = {
+    'auxiell': 'Auxiell',
+    'euxilia': 'Euxilia', 
+    'xva': 'XVA'
+}
 
 def ensure_data_directory():
     """Crea la directory data se non esiste"""
@@ -69,21 +62,6 @@ def save_user_results(results):
     ensure_data_directory()
     with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
-
-def get_company_from_email(email):
-    """Determina l'azienda dall'email"""
-    domain = email.split('@')[-1].lower()
-    company_mapping = {
-        'auxiell.com': 'auxiell',
-        'euxilia.com': 'euxilia', 
-        'xva.com': 'xva'
-    }
-    return company_mapping.get(domain, domain.split('.')[0])
-
-def is_email_allowed(email):
-    """Controlla se l'email appartiene a un dominio autorizzato"""
-    domain = email.split('@')[-1].lower()
-    return domain in AZURE_AD_CONFIG['ALLOWED_DOMAINS']
 
 def get_all_available_tests():
     """Ottieni tutti i test disponibili"""
@@ -120,112 +98,47 @@ def require_login(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Pagina di login - reindirizza a Microsoft"""
-    # Genera state per sicurezza
-    state = secrets.token_urlsafe(32)
-    session['auth_state'] = state
-    
-    # URL di autorizzazione Microsoft
-    auth_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/authorize?" + urlencode({
-        'client_id': AZURE_AD_CONFIG['CLIENT_ID'],
-        'response_type': 'code',
-        'redirect_uri': AZURE_AD_CONFIG['REDIRECT_URI'],
-        'response_mode': 'query',
-        'scope': ' '.join(AZURE_AD_CONFIG['SCOPE']),
-        'state': state,
-        'prompt': 'select_account'  # Forza la selezione dell'account
-    })
-    
-    return render_template('login_microsoft.html', auth_url=auth_url)
-
-@app.route('/auth/callback')
-def auth_callback():
-    """Callback di autenticazione Microsoft"""
-    try:
-        # Verifica lo state per sicurezza
-        if request.args.get('state') != session.get('auth_state'):
-            flash('Errore di sicurezza durante l\'autenticazione', 'error')
-            return redirect(url_for('login'))
+    """Pagina di login semplificata"""
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        company = request.form.get('company', '').strip().lower()
         
-        # Ottieni il codice di autorizzazione
-        auth_code = request.args.get('code')
-        if not auth_code:
-            error = request.args.get('error_description', 'Autenticazione fallita')
-            flash(f'Errore di autenticazione: {error}', 'error')
-            return redirect(url_for('login'))
+        # Validazioni base
+        if not name or not company:
+            flash('Nome e azienda sono obbligatori', 'error')
+            return render_template('simple_login.html', companies=ALLOWED_COMPANIES)
         
-        # Scambia il codice per un token
-        token_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/token"
-        token_data = {
-            'client_id': AZURE_AD_CONFIG['CLIENT_ID'],
-            'client_secret': AZURE_AD_CONFIG['CLIENT_SECRET'],
-            'code': auth_code,
-            'redirect_uri': AZURE_AD_CONFIG['REDIRECT_URI'],
-            'grant_type': 'authorization_code',
-            'scope': ' '.join(AZURE_AD_CONFIG['SCOPE'])
-        }
+        if len(name) < 2:
+            flash('Il nome deve essere di almeno 2 caratteri', 'error')
+            return render_template('simple_login.html', companies=ALLOWED_COMPANIES)
         
-        token_response = requests.post(token_url, data=token_data)
-        token_json = token_response.json()
+        if company not in ALLOWED_COMPANIES:
+            flash('Azienda non autorizzata', 'error')
+            return render_template('simple_login.html', companies=ALLOWED_COMPANIES)
         
-        if 'access_token' not in token_json:
-            flash('Errore nell\'ottenimento del token di accesso', 'error')
-            return redirect(url_for('login'))
-        
-        # Ottieni informazioni utente
-        access_token = token_json['access_token']
-        user_response = requests.get(
-            'https://graph.microsoft.com/v1.0/me',
-            headers={'Authorization': f'Bearer {access_token}'}
-        )
-        
-        if user_response.status_code != 200:
-            flash('Errore nell\'ottenimento delle informazioni utente', 'error')
-            return redirect(url_for('login'))
-        
-        user_data = user_response.json()
-        user_email = user_data.get('mail') or user_data.get('userPrincipalName')
-        user_name = user_data.get('displayName', '')
-        
-        # Verifica che l'email sia da un dominio autorizzato
-        if not is_email_allowed(user_email):
-            flash(f'Accesso negato. Solo gli account aziendali sono autorizzati.', 'error')
-            return redirect(url_for('login'))
-        
-        # Determina l'azienda dall'email
-        user_company = get_company_from_email(user_email)
+        # Crea un ID utente unico basato su nome + azienda
+        user_id = f"{name.lower().replace(' ', '_')}_{company}"
         
         # Imposta la sessione
-        session['user_id'] = user_email
-        session['user_name'] = user_name
-        session['user_email'] = user_email
-        session['user_company'] = user_company
-        session['access_token'] = access_token
+        session['user_id'] = user_id
+        session['user_name'] = name
+        session['user_company'] = company
         session.permanent = True
         session.modified = True
         
-        # Pulisci lo state
-        session.pop('auth_state', None)
-        
-        flash(f'Benvenuto, {user_name}!', 'success')
+        flash(f'Benvenuto, {name}!', 'success')
         return redirect(url_for('dashboard'))
-        
-    except Exception as e:
-        flash(f'Errore durante l\'autenticazione: {str(e)}', 'error')
-        return redirect(url_for('login'))
+    
+    return render_template('simple_login.html', companies=ALLOWED_COMPANIES)
 
 @app.route('/logout')
 def logout():
-    """Logout - pulisce la sessione e reindirizza a Microsoft logout"""
-    # URL di logout Microsoft
-    logout_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/logout?" + urlencode({
-        'post_logout_redirect_uri': request.url_root
-    })
-    
+    """Logout - pulisce la sessione"""
     session.clear()
-    return redirect(logout_url)
+    flash('Logout effettuato con successo', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/')
 @require_login
@@ -248,8 +161,8 @@ def dashboard():
     
     return render_template('dashboard.html',
                          user_name=user_name,
-                         user_email=session['user_email'],
-                         user_company=user_company,
+                         user_email=f"{user_name.lower().replace(' ', '.')}@{user_company}.com",  # Email fittizia per test
+                         user_company=ALLOWED_COMPANIES.get(user_company, user_company),
                          completed_tests=user_results,
                          pending_tests=pending_tests,
                          total_tests=len(all_tests),
@@ -384,7 +297,7 @@ def show_quiz():
         
         return render_template('quiz_auth.html', 
                              domande=domande_formatted,
-                             azienda=session["user_company"],
+                             azienda=ALLOWED_COMPANIES.get(session["user_company"], session["user_company"]),
                              test_name=session["test_scelto"],
                              proseguito=True,  # Sempre True perché l'utente è già loggato
                              submitted=session.get("submitted", False),
@@ -428,9 +341,9 @@ def submit_answers():
                 # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
-                    "Azienda": azienda_scelta,
+                    "Azienda": ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
                     "Utente": user_name,
-                    "Email": session["user_email"],
+                    "UserID": session["user_id"],
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": user_answer,
@@ -459,9 +372,9 @@ def submit_answers():
                 
                 risposte.append({
                     "Tipo": "chiusa",
-                    "Azienda": azienda_scelta,
+                    "Azienda": ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
                     "Utente": user_name,
-                    "Email": session["user_email"],
+                    "UserID": session["user_id"],
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": risposta_str,
@@ -486,13 +399,13 @@ def submit_answers():
         
         test_result = {
             'test_name': test_scelto,
-            'company': azienda_scelta,
+            'company': ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
             'score': perc,
             'correct_answers': n_cor,
             'total_questions': n_tot,
             'completed_at': datetime.now().isoformat(),
             'user_name': user_name,
-            'user_email': session["user_email"],
+            'user_id': session["user_id"],
             'answers': risposte
         }
         
@@ -511,7 +424,7 @@ def submit_answers():
             'total': n_tot,
             'results_data': {
                 'utente': user_name,
-                'azienda': azienda_scelta,
+                'azienda': ALLOWED_COMPANIES.get(azienda_scelta, azienda_scelta),
                 'test': test_scelto,
                 'score': perc,
                 'correct': n_cor,
@@ -549,10 +462,10 @@ def download_results():
         data_test = datetime.now().strftime("%d/%m/%Y")
         info = pd.DataFrame([{
             "Nome": utente,
-            "Email": session["user_email"],
+            "UserID": session["user_id"],
             "Data": data_test,
             "Punteggio": f"{perc}%",
-            "Azienda": session["user_company"],
+            "Azienda": ALLOWED_COMPANIES.get(session["user_company"], session["user_company"]),
             "Test": session["test_scelto"]
         }])
         
