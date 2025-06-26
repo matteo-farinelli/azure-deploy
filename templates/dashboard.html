@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Benvenuto, {{ utente }}!</h1>
+        </div>
+    </div>
+    
+    <!-- Statistiche -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Test Completati</h5>
+                        <div class="stats-number">{{ completed_tests|length }}</div>
+                    </div>
+                    <i class="fas fa-check-circle fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Test Disponibili</h5>
+                        <div class="stats-number">{{ available_tests|length }}</div>
+                    </div>
+                    <i class="fas fa-list-alt fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Punteggio Medio</h5>
+                        <div class="stats-number">
+                            {% if completed_tests %}
+                                {{ "%.0f"|format(completed_tests|sum(attribute='score')/completed_tests|length) }}%
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="fas fa-chart-line fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Test Disponibili -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h3 class="mb-3">
+                    <i class="fas fa-play-circle text-warning me-2"></i>
+                    Test Disponibili
+                </h3>
+                
+                {% if available_tests %}
+                    {% for test in available_tests %}
+                        <div class="dashboard-card test-card {% if test.completed %}test-completed{% else %}test-pending{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ test.name }}</h6>
+                                    {% if test.completed %}
+                                        <small class="text-success">
+                                            <i class="fas fa-check me-1"></i>Completato
+                                        </small>
+                                    {% else %}
+                                        <small class="text-warning">
+                                            <i class="fas fa-clock me-1"></i>Da completare
+                                        </small>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if not test.completed %}
+                                        <a href="{{ url_for('start_test', test_name=test.name) }}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-play me-1"></i>Inizia
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('start_test', test_name=test.name) }}" 
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-redo me-1"></i>Rifai
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Nessun test disponibile</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Test Completati -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h3 class="mb-3">
+                    <i class="fas fa-trophy text-success me-2"></i>
+                    Test Completati
+                </h3>
+                
+                {% if completed_tests %}
+                    {% for test in completed_tests %}
+                        <div class="dashboard-card test-card test-completed">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ test.test_name }}</h6>
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        {{ test.completed_at.split()[0] }}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="badge bg-success fs-6">{{ test.score }}%</div>
+                                    <small class="d-block text-muted">
+                                        {{ test.correct_answers }}/{{ test.total_questions }} corrette
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Nessun test completato</p>
+                        <small class="text-muted">Inizia il tuo primo test!</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
