@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session, jsonify, send_file
+from flask import Flask, render_template, request, session, jsonify, send_file, redirect, url_for, flash
 import pandas as pd
 from datetime import datetime
 import base64
@@ -9,14 +9,27 @@ import re
 from io import BytesIO
 import uuid
 import secrets
+import json
+import requests
+from urllib.parse import urlencode
 
 app = Flask(__name__)
-# Genera una chiave segreta più robusta
 app.secret_key = secrets.token_hex(32)
 app.config['SESSION_COOKIE_SECURE'] = False  # Per sviluppo
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 ora
+
+# Configurazione Azure AD
+AZURE_AD_CONFIG = {
+    'CLIENT_ID': '12345678-1234-1234-1234-123456789012',  # DA CONFIGURARE
+    'CLIENT_SECRET': 'your-client-secret-here',  # DA CONFIGURARE
+    'TENANT_ID': 'your-tenant-id-here',  # DA CONFIGURARE
+    'AUTHORITY': 'https://login.microsoftonline.com/your-tenant-id-here',
+    'REDIRECT_URI': 'https://vericaconoscenze-b8hbaagxakbwdrbr.italynorth-01.azurewebsites.net/auth/callback',
+    'SCOPE': ['openid', 'profile', 'email', 'User.Read'],
+    'ALLOWED_DOMAINS': ['auxiell.com', 'euxilia.com', 'xva.com']  # Domini aziendali permessi
+}
 
 DEFAULT_KEYS = {
     "test_scelto": None,
@@ -27,127 +40,273 @@ DEFAULT_KEYS = {
     "tutte_domande": None,
     "utente": "",
     "domande_selezionate": None,
-    "file_path": None
+    "file_path": None,
+    "user_id": None,
+    "user_name": None,
+    "user_email": None,
+    "user_company": None
 }
 
+# File per salvare i dati utenti
+RESULTS_FILE = "data/user_results.json"
+
+def ensure_data_directory():
+    """Crea la directory data se non esiste"""
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+def load_user_results():
+    """Carica i risultati degli utenti"""
+    ensure_data_directory()
+    try:
+        with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_user_results(results):
+    """Salva i risultati degli utenti"""
+    ensure_data_directory()
+    with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+
+def get_company_from_email(email):
+    """Determina l'azienda dall'email"""
+    domain = email.split('@')[-1].lower()
+    company_mapping = {
+        'auxiell.com': 'auxiell',
+        'euxilia.com': 'euxilia', 
+        'xva.com': 'xva'
+    }
+    return company_mapping.get(domain, domain.split('.')[0])
+
+def is_email_allowed(email):
+    """Controlla se l'email appartiene a un dominio autorizzato"""
+    domain = email.split('@')[-1].lower()
+    return domain in AZURE_AD_CONFIG['ALLOWED_DOMAINS']
+
+def get_all_available_tests():
+    """Ottieni tutti i test disponibili"""
+    try:
+        tipologie_file = "repository_test/Tipologia Test.xlsx"
+        df_tipologie = pd.read_excel(tipologie_file)
+        return df_tipologie["Nome test"].tolist()
+    except:
+        return []
+
+def get_user_completed_tests(user_id):
+    """Ottieni i test completati da un utente"""
+    results = load_user_results()
+    user_results = results.get(user_id, [])
+    completed_tests = set()
+    for result in user_results:
+        completed_tests.add(result.get('test_name', ''))
+    return list(completed_tests)
+
 def initialize_session():
-    """Inizializza la sessione con controlli più robusti"""
-    session.permanent = True  # Rende la sessione permanente
+    """Inizializza la sessione"""
+    session.permanent = True
     for key, default_value in DEFAULT_KEYS.items():
         if key not in session:
             session[key] = default_value
-    
-    # Forza il salvataggio della sessione
     session.modified = True
 
-def get_logo_info(azienda_scelta=None):
-    """Restituisce informazioni sul logo da utilizzare"""
-    if azienda_scelta is None:
-        logo_path = "static/images/auxiell_group_logobase.png"
-    else:
-        nome_logo = re.sub(r'\W+', '_', azienda_scelta.lower()) + "_logobase.png"
-        logo_path = os.path.join("static/images", nome_logo)
-    
-    if os.path.exists(logo_path):
-        return logo_path, True
-    return logo_path, False
+def require_login(f):
+    """Decorator per richiedere il login"""
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session or session['user_id'] is None:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
-def get_company_color(azienda):
-    """Restituisce il colore associato all'azienda"""
-    colori = {
-        "auxiell": "#C8102E",
-        "euxilia": "#0072C6",
-        "xva": "#FFD700"
-    }
-    return colori.get(azienda.lower() if azienda else "", "#F63366")
+@app.route('/login')
+def login():
+    """Pagina di login - reindirizza a Microsoft"""
+    # Genera state per sicurezza
+    state = secrets.token_urlsafe(32)
+    session['auth_state'] = state
+    
+    # URL di autorizzazione Microsoft
+    auth_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/authorize?" + urlencode({
+        'client_id': AZURE_AD_CONFIG['CLIENT_ID'],
+        'response_type': 'code',
+        'redirect_uri': AZURE_AD_CONFIG['REDIRECT_URI'],
+        'response_mode': 'query',
+        'scope': ' '.join(AZURE_AD_CONFIG['SCOPE']),
+        'state': state,
+        'prompt': 'select_account'  # Forza la selezione dell'account
+    })
+    
+    return render_template('login_microsoft.html', auth_url=auth_url)
+
+@app.route('/auth/callback')
+def auth_callback():
+    """Callback di autenticazione Microsoft"""
+    try:
+        # Verifica lo state per sicurezza
+        if request.args.get('state') != session.get('auth_state'):
+            flash('Errore di sicurezza durante l\'autenticazione', 'error')
+            return redirect(url_for('login'))
+        
+        # Ottieni il codice di autorizzazione
+        auth_code = request.args.get('code')
+        if not auth_code:
+            error = request.args.get('error_description', 'Autenticazione fallita')
+            flash(f'Errore di autenticazione: {error}', 'error')
+            return redirect(url_for('login'))
+        
+        # Scambia il codice per un token
+        token_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/token"
+        token_data = {
+            'client_id': AZURE_AD_CONFIG['CLIENT_ID'],
+            'client_secret': AZURE_AD_CONFIG['CLIENT_SECRET'],
+            'code': auth_code,
+            'redirect_uri': AZURE_AD_CONFIG['REDIRECT_URI'],
+            'grant_type': 'authorization_code',
+            'scope': ' '.join(AZURE_AD_CONFIG['SCOPE'])
+        }
+        
+        token_response = requests.post(token_url, data=token_data)
+        token_json = token_response.json()
+        
+        if 'access_token' not in token_json:
+            flash('Errore nell\'ottenimento del token di accesso', 'error')
+            return redirect(url_for('login'))
+        
+        # Ottieni informazioni utente
+        access_token = token_json['access_token']
+        user_response = requests.get(
+            'https://graph.microsoft.com/v1.0/me',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        
+        if user_response.status_code != 200:
+            flash('Errore nell\'ottenimento delle informazioni utente', 'error')
+            return redirect(url_for('login'))
+        
+        user_data = user_response.json()
+        user_email = user_data.get('mail') or user_data.get('userPrincipalName')
+        user_name = user_data.get('displayName', '')
+        
+        # Verifica che l'email sia da un dominio autorizzato
+        if not is_email_allowed(user_email):
+            flash(f'Accesso negato. Solo gli account aziendali sono autorizzati.', 'error')
+            return redirect(url_for('login'))
+        
+        # Determina l'azienda dall'email
+        user_company = get_company_from_email(user_email)
+        
+        # Imposta la sessione
+        session['user_id'] = user_email
+        session['user_name'] = user_name
+        session['user_email'] = user_email
+        session['user_company'] = user_company
+        session['access_token'] = access_token
+        session.permanent = True
+        session.modified = True
+        
+        # Pulisci lo state
+        session.pop('auth_state', None)
+        
+        flash(f'Benvenuto, {user_name}!', 'success')
+        return redirect(url_for('dashboard'))
+        
+    except Exception as e:
+        flash(f'Errore durante l\'autenticazione: {str(e)}', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/logout')
+def logout():
+    """Logout - pulisce la sessione e reindirizza a Microsoft logout"""
+    # URL di logout Microsoft
+    logout_url = f"{AZURE_AD_CONFIG['AUTHORITY']}/oauth2/v2.0/logout?" + urlencode({
+        'post_logout_redirect_uri': request.url_root
+    })
+    
+    session.clear()
+    return redirect(logout_url)
 
 @app.route('/')
-def index():
-    initialize_session()
+@require_login
+def dashboard():
+    """Dashboard utente con test completati e da fare"""
+    user_id = session['user_id']
+    user_name = session['user_name']
+    user_company = session['user_company']
     
-    # Reset della sessione se necessario
-    if request.args.get('reset') == 'true':
-        session.clear()
-        initialize_session()
+    # Ottieni tutti i test disponibili per l'azienda
+    all_tests = get_all_available_tests()
+    completed_tests = get_user_completed_tests(user_id)
     
+    # Test ancora da fare
+    pending_tests = [test for test in all_tests if test not in completed_tests]
+    
+    # Ottieni i risultati dettagliati
+    results = load_user_results()
+    user_results = results.get(user_id, [])
+    
+    return render_template('dashboard.html',
+                         user_name=user_name,
+                         user_email=session['user_email'],
+                         user_company=user_company,
+                         completed_tests=user_results,
+                         pending_tests=pending_tests,
+                         total_tests=len(all_tests),
+                         completed_count=len(completed_tests))
+
+@app.route('/take_test/<test_name>')
+@require_login
+def take_test(test_name):
+    """Inizia un test specifico"""
+    # Reset dei dati di sessione per nuovo test
+    for key in ["test_scelto", "proseguito", "submitted", "domande_selezionate", "file_path"]:
+        session[key] = None
+    
+    session["test_scelto"] = test_name
+    session["azienda_scelta"] = session["user_company"]
+    session.modified = True
+    
+    # Carica il test
     try:
-        # Carica tipologie di test
         tipologie_file = "repository_test/Tipologia Test.xlsx"
         df_tipologie = pd.read_excel(tipologie_file)
+        file_row = df_tipologie[df_tipologie["Nome test"] == test_name]
         
-        # Verifica colonne necessarie
-        if "Nome test" not in df_tipologie.columns:
-            return render_template('error.html', 
-                                 error="La colonna 'Nome test' non è presente nel file delle tipologie.")
+        if len(file_row) == 0:
+            flash(f'Test "{test_name}" non trovato', 'error')
+            return redirect(url_for('dashboard'))
         
-        # Step 1: Selezione dell'azienda
-        if session["azienda_scelta"] is None:
-            aziende_disponibili = set()
-            
-            if "Azienda" in df_tipologie.columns:
-                for aziende_string in df_tipologie["Azienda"].dropna():
-                    aziende_list = [a.strip() for a in str(aziende_string).split(";")]
-                    aziende_disponibili.update(aziende_list)
-            
-            if not aziende_disponibili:
-                all_aziende = set()
-                for _, row in df_tipologie.iterrows():
-                    test_file = row.get("Percorso file", f"repository_test/{row['Nome test']}.xlsx")
-                    try:
-                        test_df = pd.read_excel(test_file)
-                        if "Azienda" in test_df.columns:
-                            all_aziende.update(test_df["Azienda"].dropna().unique())
-                    except Exception:
-                        continue
-                aziende_disponibili = all_aziende
-            
-            aziende_disponibili = sorted([a for a in aziende_disponibili if a and not pd.isna(a)])
-            
-            if not aziende_disponibili:
-                return render_template('error.html', 
-                                     error="Nessuna azienda trovata nei file di test.")
-            
-            logo_path, logo_exists = get_logo_info()
-            
-            return render_template('select_company.html', 
-                                 aziende=aziende_disponibili,
-                                 logo_path=logo_path if logo_exists else None)
+        # Imposta tutte_domande
+        if "Tutte" in file_row.columns:
+            tutte_value = str(file_row["Tutte"].values[0]).strip().lower()
+            session["tutte_domande"] = tutte_value == "si"
+        else:
+            session["tutte_domande"] = False
         
-        # Step 2: Selezione del tipo di test
-        if session["test_scelto"] is None:
-            azienda_scelta = session["azienda_scelta"]
-            test_disponibili = []
-            
-            if "Azienda" in df_tipologie.columns:
-                for _, row in df_tipologie.iterrows():
-                    if pd.notna(row["Azienda"]):
-                        aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
-                        if azienda_scelta in aziende_test:
-                            test_disponibili.append(row["Nome test"])
-            
-            if not test_disponibili:
-                test_disponibili = sorted(df_tipologie["Nome test"].dropna().unique())
-            else:
-                test_disponibili = sorted(test_disponibili)
-            
-            logo_path, logo_exists = get_logo_info(azienda_scelta)
-            company_color = get_company_color(azienda_scelta)
-            
-            return render_template('select_test.html', 
-                                 tests=test_disponibili,
-                                 azienda=azienda_scelta,
-                                 logo_path=logo_path if logo_exists else None,
-                                 company_color=company_color)
+        # Imposta file_path
+        if "Percorso file" in file_row.columns:
+            file_path = file_row["Percorso file"].values[0]
+            session["file_path"] = file_path
+        else:
+            session["file_path"] = f"repository_test/{test_name}.xlsx"
         
-        # Step 3: Quiz
-        return show_quiz()
+        session.modified = True
+        return redirect(url_for('quiz'))
         
-    except FileNotFoundError:
-        return render_template('error.html', 
-                             error=f"File delle tipologie non trovato: {tipologie_file}")
     except Exception as e:
-        return render_template('error.html', 
-                             error=f"Errore nel caricamento delle tipologie di test: {e}")
+        flash(f'Errore nel caricamento del test: {e}', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/quiz')
+@require_login
+def quiz():
+    """Pagina del quiz"""
+    if not session.get("test_scelto"):
+        flash('Nessun test selezionato', 'error')
+        return redirect(url_for('dashboard'))
+    
+    return show_quiz()
 
 def show_quiz():
     try:
@@ -159,21 +318,21 @@ def show_quiz():
         required_cols = ["Azienda", "principio", "Domanda", "Corretta", "opzione 1"]
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
-            return render_template('error.html', 
-                                 error=f"Mancano le colonne obbligatorie: {', '.join(missing)}")
+            flash(f"Mancano le colonne obbligatorie: {', '.join(missing)}", 'error')
+            return redirect(url_for('dashboard'))
         
         option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
         if not option_cols:
-            return render_template('error.html', 
-                                 error="Nessuna colonna di opzione trovata.")
+            flash("Nessuna colonna di opzione trovata.", 'error')
+            return redirect(url_for('dashboard'))
         
         # Filtra domande per azienda
-        azienda_scelta = session["azienda_scelta"]
+        azienda_scelta = session["user_company"]
         df_filtrato = df[df["Azienda"] == azienda_scelta]
         
         if df_filtrato.empty:
-            return render_template('error.html', 
-                                 error=f"Non ci sono domande disponibili per l'azienda '{azienda_scelta}' in questo test.")
+            flash(f"Non ci sono domande disponibili per l'azienda '{azienda_scelta}' in questo test.", 'error')
+            return redirect(url_for('dashboard'))
         
         # Seleziona domande se non già fatto
         if session["domande_selezionate"] is None:
@@ -186,12 +345,12 @@ def show_quiz():
                                .reset_index(drop=True)
                 )
             session["domande_selezionate"] = domande_selezionate.to_dict('records')
+            session.modified = True
         
         domande = session["domande_selezionate"]
         
         # Prepara dati per il template
         domande_formatted = []
-        option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
         
         for idx, row in enumerate(domande):
             domanda_data = {
@@ -220,102 +379,40 @@ def show_quiz():
             
             domande_formatted.append(domanda_data)
         
-        logo_path, logo_exists = get_logo_info(session["azienda_scelta"])
-        company_color = get_company_color(session["azienda_scelta"])
+        logo_path, logo_exists = get_logo_info(session["user_company"])
+        company_color = get_company_color(session["user_company"])
         
-        return render_template('quiz.html', 
+        return render_template('quiz_auth.html', 
                              domande=domande_formatted,
-                             azienda=session["azienda_scelta"],
+                             azienda=session["user_company"],
                              test_name=session["test_scelto"],
-                             proseguito=session["proseguito"],
-                             submitted=session["submitted"],
-                             utente=session.get("utente", ""),
+                             proseguito=True,  # Sempre True perché l'utente è già loggato
+                             submitted=session.get("submitted", False),
+                             user_name=session["user_name"],
                              logo_path=logo_path if logo_exists else None,
                              company_color=company_color)
         
     except Exception as e:
-        return render_template('error.html', 
-                             error=f"Errore nel caricamento del test: {e}")
-
-@app.route('/select_company', methods=['POST'])
-def select_company():
-    azienda_scelta = request.form.get('azienda')
-    if azienda_scelta:
-        session["azienda_scelta"] = azienda_scelta
-        session.permanent = True
-        session.modified = True
-    return jsonify({'success': True})
-
-@app.route('/select_test', methods=['POST'])
-def select_test():
-    test_scelto = request.form.get('test')
-    if test_scelto:
-        session["test_scelto"] = test_scelto
-        session.permanent = True
-        
-        # Carica tipologie per ottenere il percorso del file
-        try:
-            tipologie_file = "repository_test/Tipologia Test.xlsx"
-            df_tipologie = pd.read_excel(tipologie_file)
-            file_row = df_tipologie[df_tipologie["Nome test"] == test_scelto]
-            
-            # Imposta tutte_domande
-            if "Tutte" in file_row.columns and len(file_row) > 0:
-                tutte_value = str(file_row["Tutte"].values[0]).strip().lower()
-                session["tutte_domande"] = tutte_value == "si"
-            else:
-                session["tutte_domande"] = False
-            
-            # Imposta file_path
-            if "Percorso file" in file_row.columns and len(file_row) > 0:
-                file_path = file_row["Percorso file"].values[0]
-                session["file_path"] = file_path
-            else:
-                session["file_path"] = f"repository_test/{test_scelto}.xlsx"
-                
-            session.modified = True
-                
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)})
-    
-    return jsonify({'success': True})
-
-@app.route('/set_user', methods=['POST'])
-def set_user():
-    utente = request.form.get('utente', '').strip()
-    if not utente:
-        return jsonify({'success': False, 'error': 'Per favore, inserisci il tuo nome'})
-    
-    session["utente"] = utente
-    session["proseguito"] = True
-    session.permanent = True
-    session.modified = True
-    return jsonify({'success': True})
+        flash(f'Errore nel caricamento del test: {e}', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/submit_answers', methods=['POST'])
+@require_login
 def submit_answers():
     try:
         data = request.json
         answers = data.get('answers', {})
-        quiz_data = data.get('quiz_data', {})
         
-        # Estrai i dati dal payload invece che dalla sessione
-        utente = quiz_data.get('utente', '')
-        azienda_scelta = quiz_data.get('azienda_scelta', '')
-        test_scelto = quiz_data.get('test_scelto', '')
-        domande = quiz_data.get('domande', [])
+        # Estrai i dati dalla sessione
+        user_name = session["user_name"]
+        azienda_scelta = session["user_company"]
+        test_scelto = session["test_scelto"]
+        domande = session["domande_selezionate"]
         
         if not domande:
             return jsonify({
                 'success': False, 
                 'error': 'Nessuna domanda trovata. Ricarica la pagina.',
-                'reload': True
-            })
-        
-        if not utente or not azienda_scelta:
-            return jsonify({
-                'success': False, 
-                'error': 'Dati utente mancanti. Ricarica la pagina e riprova.',
                 'reload': True
             })
         
@@ -325,14 +422,15 @@ def submit_answers():
             answer_key = f'question_{idx}'
             user_answer = answers.get(answer_key, '')
             
-            # Gestisci valori None - ora row è un dizionario
+            # Gestisci valori None
             opzione_1 = row.get("opzione 1")
             if opzione_1 is None or str(opzione_1).lower() in ['nan', 'none', '', 'null']:
                 # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
                     "Azienda": azienda_scelta,
-                    "Utente": utente,
+                    "Utente": user_name,
+                    "Email": session["user_email"],
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": user_answer,
@@ -351,7 +449,6 @@ def submit_answers():
                 if len(corrette) > 1:
                     # Risposta multipla
                     user_answers = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
-                    # Filtra risposte vuote
                     user_answers = [ans for ans in user_answers if ans]
                     is_correct = set(user_answers) == set(corrette)
                     risposta_str = ";".join(user_answers)
@@ -363,7 +460,8 @@ def submit_answers():
                 risposte.append({
                     "Tipo": "chiusa",
                     "Azienda": azienda_scelta,
-                    "Utente": utente,
+                    "Utente": user_name,
+                    "Email": session["user_email"],
                     "Domanda": row.get("Domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": risposta_str,
@@ -372,14 +470,6 @@ def submit_answers():
                     "Test": test_scelto
                 })
         
-        # Salva i risultati nella sessione per il download
-        session["submitted"] = True
-        session["risposte"] = risposte
-        session["utente"] = utente
-        session["azienda_scelta"] = azienda_scelta
-        session["test_scelto"] = test_scelto
-        session.modified = True
-        
         # Calcola punteggio
         df_r = pd.DataFrame(risposte)
         chiuse = df_r[df_r["Tipo"] == "chiusa"]
@@ -387,13 +477,40 @@ def submit_answers():
         n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
         perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
+        # Salva i risultati nel database utente
+        user_id = session["user_id"]
+        results = load_user_results()
+        
+        if user_id not in results:
+            results[user_id] = []
+        
+        test_result = {
+            'test_name': test_scelto,
+            'company': azienda_scelta,
+            'score': perc,
+            'correct_answers': n_cor,
+            'total_questions': n_tot,
+            'completed_at': datetime.now().isoformat(),
+            'user_name': user_name,
+            'user_email': session["user_email"],
+            'answers': risposte
+        }
+        
+        results[user_id].append(test_result)
+        save_user_results(results)
+        
+        # Salva i risultati nella sessione per il download
+        session["submitted"] = True
+        session["risposte"] = risposte
+        session.modified = True
+        
         return jsonify({
             'success': True, 
             'score': perc,
             'correct': n_cor,
             'total': n_tot,
             'results_data': {
-                'utente': utente,
+                'utente': user_name,
                 'azienda': azienda_scelta,
                 'test': test_scelto,
                 'score': perc,
@@ -403,7 +520,6 @@ def submit_answers():
         })
         
     except Exception as e:
-        # Log dell'errore più dettagliato
         import traceback
         error_details = traceback.format_exc()
         print(f"Errore in submit_answers: {error_details}")
@@ -413,15 +529,16 @@ def submit_answers():
             'reload': True
         })
 
-
 @app.route('/download_results')
+@require_login
 def download_results():
     try:
         if not session.get("submitted") or "risposte" not in session:
-            return "Nessun risultato disponibile", 404
+            flash("Nessun risultato disponibile per il download", "error")
+            return redirect(url_for('dashboard'))
         
         risposte = session["risposte"]
-        utente = session["utente"]
+        utente = session["user_name"]
         
         df_r = pd.DataFrame(risposte)
         chiuse = df_r[df_r["Tipo"] == "chiusa"]
@@ -432,22 +549,23 @@ def download_results():
         data_test = datetime.now().strftime("%d/%m/%Y")
         info = pd.DataFrame([{
             "Nome": utente,
+            "Email": session["user_email"],
             "Data": data_test,
             "Punteggio": f"{perc}%",
-            "Azienda": session["azienda_scelta"],
+            "Azienda": session["user_company"],
             "Test": session["test_scelto"]
         }])
         
         buf = BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            info.to_excel(writer, index=False, sheet_name="Risposte", startrow=0)
+            info.to_excel(writer, index=False, sheet_name="Risultati", startrow=0)
             df_r["Punteggio"] = f"{perc}%"
-            df_r.to_excel(writer, index=False, sheet_name="DB Risposte", startrow=0)
+            df_r.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
         
         # Proteggi il foglio
         buf.seek(0)
         wb = load_workbook(buf)
-        ws = wb["Risposte"]
+        ws = wb["Risultati"]
         ws.protection.sheet = True
         ws.protection.password = "assessment25"
         ws.protection.enable()
@@ -456,7 +574,7 @@ def download_results():
         wb.save(buf_protetto)
         buf_protetto.seek(0)
         
-        filename = f"risposte_{utente.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"risultati_{utente.replace(' ', '_')}_{session['test_scelto']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
         return send_file(
             buf_protetto,
@@ -466,20 +584,29 @@ def download_results():
         )
         
     except Exception as e:
-        return f"Errore nella generazione del file: {e}", 500
+        flash(f"Errore nella generazione del file: {e}", "error")
+        return redirect(url_for('dashboard'))
 
-@app.route('/reset')
-def reset():
-    session.clear()
-    return jsonify({'success': True})
+def get_logo_info(azienda_scelta=None):
+    """Restituisce informazioni sul logo da utilizzare"""
+    if azienda_scelta is None:
+        logo_path = "static/images/auxiell_group_logobase.png"
+    else:
+        nome_logo = re.sub(r'\W+', '_', azienda_scelta.lower()) + "_logobase.png"
+        logo_path = os.path.join("static/images", nome_logo)
+    
+    if os.path.exists(logo_path):
+        return logo_path, True
+    return logo_path, False
 
-@app.route('/debug')
-def debug():
-    """Route per debug della sessione - RIMUOVI IN PRODUZIONE"""
-    return jsonify({
-        'session_data': dict(session),
-        'session_id': request.cookies.get('session', 'No session cookie')
-    })
+def get_company_color(azienda):
+    """Restituisce il colore associato all'azienda"""
+    colori = {
+        "auxiell": "#C8102E",
+        "euxilia": "#0072C6",
+        "xva": "#FFD700"
+    }
+    return colori.get(azienda.lower() if azienda else "", "#F63366")
 
 if __name__ == '__main__':
     app.run(debug=True)
