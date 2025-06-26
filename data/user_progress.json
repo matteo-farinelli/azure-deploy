@@ -1,5 +1,14 @@
 {
-  "users": {},
+  "users": {
+    "matteo.farinelli@auxiell.com": {
+      "email": "matteo.farinelli@auxiell.com",
+      "nome": "Matteo",
+      "cognome": "Farinelli",
+      "azienda": "auxiell",
+      "created_at": "2025-06-26T14:42:44.995551",
+      "last_login": "2025-06-26T14:42:44.995554"
+    }
+  },
   "test_results": [],
-  "last_updated": "2024-01-01T00:00:00.000Z"
+  "last_updated": "2025-06-26T14:42:44.995609"
 }
