@@ -9,9 +9,9 @@ import re
 from io import BytesIO
 import uuid
 import secrets
-import sqlite3
 from functools import wraps
 import json
+import requests
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -20,50 +20,139 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600
 
-# Database
-DATABASE = 'assessment_app.db'
+# Configurazione GitHub per salvare progressi
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')  # Token GitHub da Azure App Settings
+GITHUB_REPO = os.environ.get('GITHUB_REPO')   # es: "username/repo-name"
+GITHUB_BRANCH = 'main'
+PROGRESS_FILE = 'data/user_progress.json'
 
-def init_db():
-    """Inizializza il database"""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    # Tabella utenti semplificata - solo email
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            nome TEXT NOT NULL,
-            cognome TEXT NOT NULL,
-            azienda TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP
-        )
-    ''')
-    
-    # Tabella risultati test
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS test_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT NOT NULL,
-            test_name TEXT NOT NULL,
-            azienda TEXT NOT NULL,
-            score INTEGER NOT NULL,
-            correct_answers INTEGER NOT NULL,
-            total_questions INTEGER NOT NULL,
-            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            answers_json TEXT
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+# File locale per cache
+LOCAL_PROGRESS_FILE = 'user_progress.json'
 
-def get_db_connection():
-    """Connessione database"""
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+def load_progress_data():
+    """Carica i dati di progresso dal file JSON"""
+    try:
+        # Prima prova a caricare dal file locale
+        if os.path.exists(LOCAL_PROGRESS_FILE):
+            with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                print(f"✓ Progressi caricati dal file locale: {len(data.get('users', {}))} utenti")
+                return data
+        
+        # Se non esiste, inizializza struttura vuota
+        return {
+            "users": {},
+            "test_results": [],
+            "last_updated": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Errore caricamento progressi: {e}")
+        return {
+            "users": {},
+            "test_results": [],
+            "last_updated": datetime.now().isoformat()
+        }
+
+def save_progress_data(data):
+    """Salva i dati di progresso localmente e su GitHub"""
+    try:
+        # Aggiorna timestamp
+        data["last_updated"] = datetime.now().isoformat()
+        
+        # Salva localmente
+        with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        print(f"✓ Progressi salvati localmente: {len(data.get('users', {}))} utenti, {len(data.get('test_results', []))} risultati")
+        
+        # Salva su GitHub (solo se configurato)
+        if GITHUB_TOKEN and GITHUB_REPO:
+            save_to_github(data)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Errore salvataggio progressi: {e}")
+        return False
+
+def save_to_github(data):
+    """Salva i dati su GitHub repository"""
+    try:
+        # Prepara i dati per GitHub API
+        content = json.dumps(data, indent=2, ensure_ascii=False)
+        encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+        
+        # URL GitHub API
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROGRESS_FILE}"
+        
+        headers = {
+            'Authorization': f'token {GITHUB_TOKEN}',
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        }
+        
+        # Controlla se il file esiste già
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                sha = response.json()['sha']
+            else:
+                sha = None
+        except:
+            sha = None
+        
+        # Prepara payload
+        payload = {
+            'message': f'Update user progress - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+            'content': encoded_content,
+            'branch': GITHUB_BRANCH
+        }
+        
+        if sha:
+            payload['sha'] = sha
+        
+        # Invia a GitHub
+        response = requests.put(url, headers=headers, json=payload)
+        
+        if response.status_code in [200, 201]:
+            print("✓ Progressi salvati su GitHub")
+            return True
+        else:
+            print(f"Errore GitHub API: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Errore salvataggio GitHub: {e}")
+        return False
+
+def get_user_data(email):
+    """Ottiene i dati di un utente"""
+    data = load_progress_data()
+    return data["users"].get(email, {})
+
+def save_user_data(email, user_info):
+    """Salva i dati di un utente"""
+    data = load_progress_data()
+    data["users"][email] = user_info
+    save_progress_data(data)
+
+def get_user_test_results(email):
+    """Ottiene i risultati test di un utente"""
+    data = load_progress_data()
+    user_results = []
+    for result in data["test_results"]:
+        if result.get("user_email") == email:
+            user_results.append(result)
+    return sorted(user_results, key=lambda x: x.get("completed_at", ""), reverse=True)
+
+def save_test_result(result):
+    """Salva un risultato test"""
+    data = load_progress_data()
+    result["id"] = len(data["test_results"]) + 1
+    result["completed_at"] = datetime.now().isoformat()
+    data["test_results"].append(result)
+    save_progress_data(data)
 
 def validate_email(email):
     """Valida email aziendale"""
@@ -120,6 +209,50 @@ def get_company_color(azienda):
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
 
+# Health check
+@app.route('/health')
+def health_check():
+    """Health check con info storage"""
+    try:
+        data = load_progress_data()
+        return jsonify({
+            'status': 'healthy',
+            'storage_type': 'GitHub JSON',
+            'users_count': len(data.get('users', {})),
+            'results_count': len(data.get('test_results', [])),
+            'last_updated': data.get('last_updated'),
+            'github_configured': bool(GITHUB_TOKEN and GITHUB_REPO),
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/debug/storage')
+def debug_storage():
+    """Debug storage - mostra contenuto file"""
+    try:
+        data = load_progress_data()
+        
+        # Rimuovi dati sensibili per debug
+        debug_data = {
+            'users_count': len(data.get('users', {})),
+            'users_emails': list(data.get('users', {}).keys()),
+            'results_count': len(data.get('test_results', [])),
+            'last_updated': data.get('last_updated'),
+            'recent_results': data.get('test_results', [])[-5:] if data.get('test_results') else [],
+            'github_configured': bool(GITHUB_TOKEN and GITHUB_REPO),
+            'github_repo': GITHUB_REPO if GITHUB_REPO else 'Not configured',
+            'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE)
+        }
+        
+        return jsonify(debug_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/')
 def index():
     if session.get('logged_in'):
@@ -134,36 +267,45 @@ def login():
         if not validate_email(email):
             return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com')
         
-        # Estrai info dall'email
-        azienda = extract_company_from_email(email)
-        nome, cognome = extract_name_from_email(email)
-        
-        # Crea o aggiorna utente
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-        
-        if not user:
-            # Crea nuovo utente
-            conn.execute('''
-                INSERT INTO users (email, nome, cognome, azienda, last_login)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (email, nome, cognome, azienda))
-            conn.commit()
-        else:
-            # Aggiorna ultimo login
-            conn.execute('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE email = ?', (email,))
-            conn.commit()
-        
-        conn.close()
-        
-        # Imposta sessione
-        session['logged_in'] = True
-        session['user_email'] = email
-        session['utente'] = f"{nome} {cognome}"
-        session['azienda_scelta'] = azienda
-        session.permanent = True
-        
-        return redirect(url_for('dashboard'))
+        try:
+            # Estrai info dall'email
+            azienda = extract_company_from_email(email)
+            nome, cognome = extract_name_from_email(email)
+            
+            # Carica o crea utente
+            user_data = get_user_data(email)
+            
+            if not user_data:
+                # Nuovo utente
+                user_data = {
+                    'email': email,
+                    'nome': nome,
+                    'cognome': cognome,
+                    'azienda': azienda,
+                    'created_at': datetime.now().isoformat(),
+                    'last_login': datetime.now().isoformat()
+                }
+                print(f"✓ Nuovo utente: {email}")
+            else:
+                # Aggiorna ultimo login
+                user_data['last_login'] = datetime.now().isoformat()
+                print(f"✓ Login utente esistente: {email}")
+            
+            # Salva utente
+            save_user_data(email, user_data)
+            
+            # Imposta sessione
+            session['logged_in'] = True
+            session['user_email'] = email
+            session['utente'] = f"{nome} {cognome}"
+            session['azienda_scelta'] = azienda
+            session.permanent = True
+            
+            return redirect(url_for('dashboard'))
+            
+        except Exception as e:
+            print(f"Errore login: {e}")
+            return render_template('login.html', error='Errore durante il login. Riprova.')
     
     return render_template('login.html')
 
@@ -175,56 +317,54 @@ def logout():
 @app.route('/dashboard')
 @login_required 
 def dashboard():
-    user_email = session.get('user_email')
-    azienda = session.get('azienda_scelta')
-    
-    # Test completati
-    conn = get_db_connection()
-    completed_tests = conn.execute('''
-        SELECT test_name, score, correct_answers, total_questions, completed_at
-        FROM test_results
-        WHERE user_email = ?
-        ORDER BY completed_at DESC
-    ''', (user_email,)).fetchall()
-    conn.close()
-    
-    # Test disponibili
-    available_tests = []
-    completed_test_names = [test['test_name'] for test in completed_tests]
-    
     try:
-        tipologie_file = "repository_test/Tipologia Test.xlsx"
-        if os.path.exists(tipologie_file):
-            df_tipologie = pd.read_excel(tipologie_file)
-            
-            if "Nome test" in df_tipologie.columns:
-                for _, row in df_tipologie.iterrows():
-                    test_name = row["Nome test"]
-                    
-                    # Verifica se disponibile per l'azienda
-                    test_available = True
-                    if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
-                        aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
-                        test_available = azienda in aziende_test
-                    
-                    if test_available:
-                        available_tests.append({
-                            'name': test_name,
-                            'completed': test_name in completed_test_names
-                        })
+        user_email = session.get('user_email')
+        azienda = session.get('azienda_scelta')
+        
+        # Test completati
+        completed_tests = get_user_test_results(user_email)
+        
+        # Test disponibili
+        available_tests = []
+        completed_test_names = [test['test_name'] for test in completed_tests]
+        
+        try:
+            tipologie_file = "repository_test/Tipologia Test.xlsx"
+            if os.path.exists(tipologie_file):
+                df_tipologie = pd.read_excel(tipologie_file)
+                
+                if "Nome test" in df_tipologie.columns:
+                    for _, row in df_tipologie.iterrows():
+                        test_name = row["Nome test"]
+                        
+                        # Verifica se disponibile per l'azienda
+                        test_available = True
+                        if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
+                            aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
+                            test_available = azienda in aziende_test
+                        
+                        if test_available:
+                            available_tests.append({
+                                'name': test_name,
+                                'completed': test_name in completed_test_names
+                            })
+        except Exception as e:
+            print(f"Errore caricamento test: {e}")
+        
+        logo_path, logo_exists = get_logo_info(azienda)
+        company_color = get_company_color(azienda)
+        
+        return render_template('dashboard.html',
+                             completed_tests=completed_tests,
+                             available_tests=available_tests,
+                             utente=session.get('utente'),
+                             azienda=azienda,
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+    
     except Exception as e:
-        print(f"Errore caricamento test: {e}")
-    
-    logo_path, logo_exists = get_logo_info(azienda)
-    company_color = get_company_color(azienda)
-    
-    return render_template('dashboard.html',
-                         completed_tests=completed_tests,
-                         available_tests=available_tests,
-                         utente=session.get('utente'),
-                         azienda=azienda,
-                         logo_path=logo_path if logo_exists else None,
-                         company_color=company_color)
+        print(f"Errore dashboard: {e}")
+        return render_template('error.html', error=f'Errore nel caricamento della dashboard: {e}')
 
 @app.route('/start_test/<test_name>')
 @login_required
@@ -426,19 +566,25 @@ def submit_answers():
         n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
         perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
-        # Salva nel database
-        conn = get_db_connection()
-        conn.execute('''
-            INSERT INTO test_results (user_email, test_name, azienda, score, correct_answers, total_questions, answers_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (user_email, test_scelto, azienda_scelta, perc, n_cor, n_tot, json.dumps(risposte)))
-        conn.commit()
-        conn.close()
+        # Salva risultato
+        result = {
+            'user_email': user_email,
+            'test_name': test_scelto,
+            'azienda': azienda_scelta,
+            'score': perc,
+            'correct_answers': n_cor,
+            'total_questions': n_tot,
+            'answers_json': json.dumps(risposte)
+        }
+        
+        save_test_result(result)
         
         # Sessione
         session["submitted"] = True
         session["risposte"] = risposte
         session.modified = True
+        
+        print(f"✓ Test completato: {user_email} - {test_scelto} - {perc}%")
         
         return jsonify({
             'success': True,
@@ -448,6 +594,7 @@ def submit_answers():
         })
         
     except Exception as e:
+        print(f"Errore submit: {e}")
         return jsonify({'success': False, 'error': f'Errore: {str(e)}', 'reload': True})
 
 @app.route('/download_results')
@@ -499,9 +646,6 @@ def download_results():
         
     except Exception as e:
         return f"Errore: {e}", 500
-
-# Inizializza database all'avvio
-init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
