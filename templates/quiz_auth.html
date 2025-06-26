@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}{{ test_name }} - Assessment Platform{% endblock %}
+
+{% block content %}
+<div class="quiz-header">
+    <div class="user-info">
+        <span>👤 {{ user_name }}</span>
+        <span>🏢 {{ azienda }}</span>
+    </div>
+    <div class="quiz-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-back">← Dashboard</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+    </div>
+</div>
+
+<div class="alert alert-success">
+    <strong>Test Caricato:</strong> {{ test_name }}
+</div>
+
+{% if not submitted %}
+<div class="quiz-intro">
+    <h2>📝 {{ test_name }}</h2>
+    <p>Rispondi alle seguenti domande. I tuoi progressi vengono salvati automaticamente.</p>
+</div>
+
+<form id="quizForm">
+    {% for domanda in domande %}
+    <div class="question-block">
+        <div class="question-title">{{ domanda.domanda }}</div>
+        <div class="question-subtitle">Argomento: {{ domanda.principio }}</div>
+        
+        {% if domanda.tipo == 'aperta' %}
+        <div class="form-group">
+            <textarea name="question_{{ domanda.id }}" id="question_{{ domanda.id }}" 
+                     class="form-control" rows="3" placeholder="Inserisci la tua risposta..."></textarea>
+        </div>
+        {% else %}
+            {% if domanda.multiple %}
+            <div class="checkbox-group">
+                <small class="question-subtitle">(Seleziona tutte le risposte corrette)</small>
+                {% for opzione in domanda.opzioni %}
+                <div class="checkbox-option">
+                    <label>
+                        <input type="checkbox" name="question_{{ domanda.id }}" value="{{ opzione }}">
+                        {{ opzione }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="radio-group">
+                {% for opzione in domanda.opzioni %}
+                <div class="radio-option">
+                    <label>
+                        <input type="radio" name="question_{{ domanda.id }}" value="{{ opzione }}">
+                        {{ opzione }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <div class="quiz-submit">
+        <button type="submit" class="btn btn-primary">📤 Invia Risposte</button>
+        <p class="submit-note">Assicurati di aver completato tutte le domande prima di inviare.</p>
+    </div>
+</form>
+{% endif %}
+
+{% if submitted %}
+<div id="results">
+    <div class="alert alert-success">
+        <strong>🎉 Test Completato!</strong> Le tue risposte sono state salvate con successo.
+    </div>
+    
+    <div id="score-display" class="score-card">
+        <!-- Il punteggio verrà mostrato qui via JavaScript -->
+    </div>
+    
+    <div class="results-actions">
+        <a href="/download_results" class="btn btn-primary">
+            📄 Scarica Risultati Excel
+        </a>
+        
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+            🏠 Torna alla Dashboard
+        </a>
+        
+        <a href="{{ url_for('logout') }}" class="btn btn-logout">
+            🚪 Logout
+        </a>
+    </div>
+</div>
+
+<script>
+// Carica i risultati dal localStorage se disponibili
+$(document).ready(function() {
+    const results = localStorage.getItem('quiz_results');
+    if (results) {
+        const data = JSON.parse(results);
+        const scoreClass = data.score >= 80 ? 'high' : data.score >= 60 ? 'medium' : 'low';
+        $('#score-display').html(`
+            <div class="score-header">
+                <h3>📊 Risultato Finale</h3>
+            </div>
+            <div class="score-content">
+                <div class="score-main ${scoreClass}">
+                    <span class="score-number">${data.score}%</span>
+                    <span class="score-detail">${data.correct}/${data.total} corrette</span>
+                </div>
+                <div class="score-message">
+                    ${data.score >= 80 ? '🎉 Ottimo lavoro!' : 
+                      data.score >= 60 ? '👍 Buon risultato!' : 
+                      '📚 Continua a studiare!'}
+                </div>
+            </div>
+        `);
+        // Pulisci il localStorage
+        localStorage.removeItem('quiz_results');
+    }
+});
+</script>
+{% endif %}
+
+<div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <p>Elaborazione in corso...</p>
+</div>
+
+<style>
+.quiz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.user-info {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+    color: #666;
+}
+
+.quiz-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-back {
+    background-color: #6c757d;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.btn-back:hover {
+    background-color: #545b62;
+    text-decoration: none;
+    color: white;
+}
+
+.btn-logout {
+    background-color: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.btn-logout:hover {
+    background-color: #c82333;
+    text-decoration: none;
+    color: white;
+}
+
+.quiz-intro {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border-radius: 8px;
+}
+
+.quiz-intro h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.quiz-intro p {
+    color: #666;
+    margin: 0;
+}
+
+.quiz-submit {
+    text-align: center;
+    margin-top: 40px;
+    padding: 30px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.quiz-submit .btn {
+    font-size: 18px;
+    padding: 15px 30px;
+}
+
+.submit-note {
+    margin-top: 15px;
+    color: #666;
+    font-size: 14px;
+}
+
+.score-card {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 30px;
+    margin: 20px 0;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.score-header h3 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.score-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.score-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.score-main.high {
+    background-color: #d4edda;
+    border: 2px solid #28a745;
+}
+
+.score-main.medium {
+    background-color: #fff3cd;
+    border: 2px solid #ffc107;
+}
+
+.score-main.low {
+    background-color: #f8d7da;
+    border: 2px solid #dc3545;
+}
+
+.score-number {
+    font-size: 48px;
+    font-weight: bold;
+    color: #333;
+}
+
+.score-detail {
+    font-size: 18px;
+    color: #666;
+}
+
+.score-message {
+    font-size: 20px;
+    font-weight: 500;
+    color: #333;
+}
+
+.results-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-top: 30px;
+}
+
+.results-actions .btn {
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+.loading {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loading.show {
+    display: flex;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid var(--company-color, #007bff);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading p {
+    color: white;
+    font-size: 18px;
+}
+
+@media (max-width: 768px) {
+    .quiz-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .user-info {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .results-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .results-actions .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Form quiz
+    $('#quizForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Raccogli tutte le risposte
+        const answers = {};
+        
+        // Domande aperte (textarea)
+        $('textarea[name^="question_"]').each(function() {
+            const name = $(this).attr('name');
+            answers[name] = $(this).val();
+        });
+        
+        // Domande a risposta singola (radio)
+        $('input[type="radio"]:checked').each(function() {
+            const name = $(this).attr('name');
+            answers[name] = $(this).val();
+        });
+        
+        // Domande a risposta multipla (checkbox)
+        const checkboxGroups = {};
+        $('input[type="checkbox"]:checked').each(function() {
+            const name = $(this).attr('name');
+            if (!checkboxGroups[name]) {
+                checkboxGroups[name] = [];
+            }
+            checkboxGroups[name].push($(this).val());
+        });
+        
+        // Aggiungi le risposte multiple all'oggetto answers
+        for (const [name, values] of Object.entries(checkboxGroups)) {
+            answers[name] = values;
+        }
+        
+        const payload = {
+            answers: answers
+        };
+        
+        $('#loading').addClass('show');
+        $('button[type="submit"]').prop('disabled', true);
+        
+        $.ajax({
+            url: '/submit_answers',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(response) {
+                $('#loading').removeClass('show');
+                
+                if (response.success) {
+                    // Salva i risultati nel localStorage per la pagina risultati
+                    localStorage.setItem('quiz_results', JSON.stringify(response.results_data));
+                    
+                    // Ricarica la pagina per mostrare i risultati
+                    window.location.reload();
+                } else {
+                    if (response.reload) {
+                        alert(response.error + '\n\nLa pagina verrà ricaricata.');
+                        window.location.reload();
+                    } else {
+                        alert('Errore nell\'invio delle risposte: ' + (response.error || 'Errore sconosciuto'));
+                        $('button[type="submit"]').prop('disabled', false);
+                    }
+                }
+            },
+            error: function() {
+                alert('Errore di connessione');
+                $('#loading').removeClass('show');
+                $('button[type="submit"]').prop('disabled', false);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
