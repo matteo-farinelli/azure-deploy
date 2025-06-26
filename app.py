@@ -1,3 +1,4 @@
+# app.py - Versione con sincronizzazione GitHub completa
 from flask import Flask, render_template, request, session, jsonify, send_file, redirect, url_for
 import pandas as pd
 from datetime import datetime
@@ -20,31 +21,98 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600
 
-# Configurazione GitHub per salvare progressi
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')  # Token GitHub da Azure App Settings
-GITHUB_REPO = os.environ.get('GITHUB_REPO')   # es: "username/repo-name"
+# Configurazione GitHub
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_REPO = os.environ.get('GITHUB_REPO')
 GITHUB_BRANCH = 'main'
 PROGRESS_FILE = 'data/user_progress.json'
-
-# File locale per cache
 LOCAL_PROGRESS_FILE = 'user_progress.json'
 
-def load_progress_data():
-    """Carica i dati di progresso dal file JSON"""
+def load_from_github():
+    """Carica i dati da GitHub repository"""
     try:
-        # Prima prova a caricare dal file locale
-        if os.path.exists(LOCAL_PROGRESS_FILE):
-            with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"✓ Progressi caricati dal file locale: {len(data.get('users', {}))} utenti")
-                return data
+        if not GITHUB_TOKEN or not GITHUB_REPO:
+            print("⚠ GitHub non configurato - usando solo storage locale")
+            return None
         
-        # Se non esiste, inizializza struttura vuota
-        return {
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROGRESS_FILE}"
+        headers = {
+            'Authorization': f'token {GITHUB_TOKEN}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            content = response.json()['content']
+            decoded_content = base64.b64decode(content).decode('utf-8')
+            data = json.loads(decoded_content)
+            print(f"✓ Dati caricati da GitHub: {len(data.get('users', {}))} utenti, {len(data.get('test_results', []))} risultati")
+            return data
+        elif response.status_code == 404:
+            print("⚠ File non trovato su GitHub - creazione nuovo file")
+            return None
+        else:
+            print(f"⚠ Errore GitHub API: {response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"⚠ Errore caricamento da GitHub: {e}")
+        return None
+
+def sync_with_github():
+    """Sincronizza i dati locali con GitHub all'avvio"""
+    try:
+        print("=== Sincronizzazione con GitHub ===")
+        
+        # Carica da GitHub
+        github_data = load_from_github()
+        
+        if github_data:
+            # Salva localmente i dati di GitHub
+            with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(github_data, f, indent=2, ensure_ascii=False)
+            print("✓ Dati GitHub sincronizzati localmente")
+            return github_data
+        else:
+            # Se GitHub non ha dati, usa quelli locali o crea nuovi
+            if os.path.exists(LOCAL_PROGRESS_FILE):
+                with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                    local_data = json.load(f)
+                print("✓ Usando dati locali esistenti")
+                return local_data
+            else:
+                # Crea nuovo file
+                new_data = {
+                    "users": {},
+                    "test_results": [],
+                    "last_updated": datetime.now().isoformat()
+                }
+                with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(new_data, f, indent=2, ensure_ascii=False)
+                print("✓ Creato nuovo file progressi")
+                return new_data
+                
+    except Exception as e:
+        print(f"✗ Errore sincronizzazione: {e}")
+        # Fallback: crea file vuoto
+        empty_data = {
             "users": {},
             "test_results": [],
             "last_updated": datetime.now().isoformat()
         }
+        return empty_data
+
+def load_progress_data():
+    """Carica i dati di progresso dal file JSON locale"""
+    try:
+        if os.path.exists(LOCAL_PROGRESS_FILE):
+            with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data
+        else:
+            # Se non esiste, sincronizza con GitHub
+            return sync_with_github()
         
     except Exception as e:
         print(f"Errore caricamento progressi: {e}")
@@ -57,7 +125,6 @@ def load_progress_data():
 def save_progress_data(data):
     """Salva i dati di progresso localmente e su GitHub"""
     try:
-        # Aggiorna timestamp
         data["last_updated"] = datetime.now().isoformat()
         
         # Salva localmente
@@ -66,7 +133,7 @@ def save_progress_data(data):
         
         print(f"✓ Progressi salvati localmente: {len(data.get('users', {}))} utenti, {len(data.get('test_results', []))} risultati")
         
-        # Salva su GitHub (solo se configurato)
+        # Salva su GitHub
         if GITHUB_TOKEN and GITHUB_REPO:
             save_to_github(data)
         
@@ -79,20 +146,17 @@ def save_progress_data(data):
 def save_to_github(data):
     """Salva i dati su GitHub repository"""
     try:
-        # Prepara i dati per GitHub API
         content = json.dumps(data, indent=2, ensure_ascii=False)
         encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
         
-        # URL GitHub API
         url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROGRESS_FILE}"
-        
         headers = {
             'Authorization': f'token {GITHUB_TOKEN}',
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json'
         }
         
-        # Controlla se il file esiste già
+        # Controlla se il file esiste
         try:
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
@@ -102,7 +166,6 @@ def save_to_github(data):
         except:
             sha = None
         
-        # Prepara payload
         payload = {
             'message': f'Update user progress - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
             'content': encoded_content,
@@ -112,7 +175,6 @@ def save_to_github(data):
         if sha:
             payload['sha'] = sha
         
-        # Invia a GitHub
         response = requests.put(url, headers=headers, json=payload)
         
         if response.status_code in [200, 201]:
@@ -209,12 +271,30 @@ def get_company_color(azienda):
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
 
+# Sincronizzazione all'avvio dell'app
+@app.before_first_request
+def initialize_app():
+    """Inizializza l'app e sincronizza con GitHub"""
+    print("=== Inizializzazione App ===")
+    sync_with_github()
+    print("=== App Pronta ===")
+
 # Health check
 @app.route('/health')
 def health_check():
     """Health check con info storage"""
     try:
         data = load_progress_data()
+        
+        # Test connessione GitHub
+        github_status = "Not configured"
+        if GITHUB_TOKEN and GITHUB_REPO:
+            try:
+                github_data = load_from_github()
+                github_status = "Connected" if github_data else "Error"
+            except:
+                github_status = "Error"
+        
         return jsonify({
             'status': 'healthy',
             'storage_type': 'GitHub JSON',
@@ -222,6 +302,8 @@ def health_check():
             'results_count': len(data.get('test_results', [])),
             'last_updated': data.get('last_updated'),
             'github_configured': bool(GITHUB_TOKEN and GITHUB_REPO),
+            'github_status': github_status,
+            'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE),
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
@@ -233,11 +315,10 @@ def health_check():
 
 @app.route('/debug/storage')
 def debug_storage():
-    """Debug storage - mostra contenuto file"""
+    """Debug storage con dettagli"""
     try:
         data = load_progress_data()
         
-        # Rimuovi dati sensibili per debug
         debug_data = {
             'users_count': len(data.get('users', {})),
             'users_emails': list(data.get('users', {}).keys()),
@@ -246,12 +327,31 @@ def debug_storage():
             'recent_results': data.get('test_results', [])[-5:] if data.get('test_results') else [],
             'github_configured': bool(GITHUB_TOKEN and GITHUB_REPO),
             'github_repo': GITHUB_REPO if GITHUB_REPO else 'Not configured',
-            'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE)
+            'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE),
+            'local_file_size': os.path.getsize(LOCAL_PROGRESS_FILE) if os.path.exists(LOCAL_PROGRESS_FILE) else 0
         }
         
         return jsonify(debug_data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/sync')
+def manual_sync():
+    """Endpoint per sincronizzazione manuale"""
+    try:
+        data = sync_with_github()
+        return jsonify({
+            'success': True,
+            'message': 'Sincronizzazione completata',
+            'users_count': len(data.get('users', {})),
+            'results_count': len(data.get('test_results', [])),
+            'last_updated': data.get('last_updated')
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/')
 def index():
@@ -268,7 +368,6 @@ def login():
             return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com')
         
         try:
-            # Estrai info dall'email
             azienda = extract_company_from_email(email)
             nome, cognome = extract_name_from_email(email)
             
@@ -276,7 +375,6 @@ def login():
             user_data = get_user_data(email)
             
             if not user_data:
-                # Nuovo utente
                 user_data = {
                     'email': email,
                     'nome': nome,
@@ -287,14 +385,11 @@ def login():
                 }
                 print(f"✓ Nuovo utente: {email}")
             else:
-                # Aggiorna ultimo login
                 user_data['last_login'] = datetime.now().isoformat()
                 print(f"✓ Login utente esistente: {email}")
             
-            # Salva utente
             save_user_data(email, user_data)
             
-            # Imposta sessione
             session['logged_in'] = True
             session['user_email'] = email
             session['utente'] = f"{nome} {cognome}"
@@ -321,8 +416,11 @@ def dashboard():
         user_email = session.get('user_email')
         azienda = session.get('azienda_scelta')
         
-        # Test completati
+        print(f"Dashboard per {user_email}")
+        
+        # Test completati - ricarica sempre i dati più recenti
         completed_tests = get_user_test_results(user_email)
+        print(f"Test completati trovati: {len(completed_tests)}")
         
         # Test disponibili
         available_tests = []
@@ -337,7 +435,6 @@ def dashboard():
                     for _, row in df_tipologie.iterrows():
                         test_name = row["Nome test"]
                         
-                        # Verifica se disponibile per l'azienda
                         test_available = True
                         if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
                             aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
@@ -348,6 +445,7 @@ def dashboard():
                                 'name': test_name,
                                 'completed': test_name in completed_test_names
                             })
+                            
         except Exception as e:
             print(f"Errore caricamento test: {e}")
         
@@ -366,16 +464,16 @@ def dashboard():
         print(f"Errore dashboard: {e}")
         return render_template('error.html', error=f'Errore nel caricamento della dashboard: {e}')
 
+# [Resto del codice rimane uguale: start_test, quiz, show_quiz, submit_answers, download_results]
+
 @app.route('/start_test/<test_name>')
 @login_required
 def start_test(test_name):
-    # Reset dati test
     session["test_scelto"] = test_name
     session["proseguito"] = False
     session["submitted"] = False
     session["domande_selezionate"] = None
     
-    # Carica configurazione test
     try:
         tipologie_file = "repository_test/Tipologia Test.xlsx"
         df_tipologie = pd.read_excel(tipologie_file)
@@ -417,20 +515,17 @@ def show_quiz():
         file_path = session.get("file_path", "")
         df = pd.read_excel(file_path)
         
-        # Verifica colonne
         required_cols = ["Azienda", "principio", "Domanda", "Corretta", "opzione 1"]
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
             return render_template('error.html', error=f"Colonne mancanti: {', '.join(missing)}")
         
-        # Filtra per azienda
         azienda_scelta = session["azienda_scelta"]
         df_filtrato = df[df["Azienda"] == azienda_scelta]
         
         if df_filtrato.empty:
             return render_template('error.html', error=f"Nessuna domanda per {azienda_scelta}")
         
-        # Seleziona domande
         if session["domande_selezionate"] is None:
             if session["tutte_domande"]:
                 domande_selezionate = df_filtrato.reset_index(drop=True)
@@ -444,7 +539,6 @@ def show_quiz():
         
         domande = session["domande_selezionate"]
         
-        # Format domande
         domande_formatted = []
         option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
         
@@ -516,7 +610,6 @@ def submit_answers():
             
             opzione_1 = row.get("opzione 1")
             if opzione_1 is None or str(opzione_1).lower() in ['nan', 'none', '']:
-                # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
                     "Azienda": azienda_scelta,
@@ -529,7 +622,6 @@ def submit_answers():
                     "Test": test_scelto
                 })
             else:
-                # Domanda chiusa
                 corretta_raw = row.get("corretta", "")
                 if corretta_raw is None:
                     corretta_raw = ""
@@ -537,13 +629,11 @@ def submit_answers():
                 corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
                 
                 if len(corrette) > 1:
-                    # Multipla
                     user_answers = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
                     user_answers = [ans for ans in user_answers if ans]
                     is_correct = set(user_answers) == set(corrette)
                     risposta_str = ";".join(user_answers)
                 else:
-                    # Singola
                     is_correct = user_answer in corrette if corrette else False
                     risposta_str = user_answer
                 
@@ -579,12 +669,11 @@ def submit_answers():
         
         save_test_result(result)
         
-        # Sessione
         session["submitted"] = True
         session["risposte"] = risposte
         session.modified = True
         
-        print(f"✓ Test completato: {user_email} - {test_scelto} - {perc}%")
+        print(f"✓ Test completato e salvato: {user_email} - {test_scelto} - {perc}%")
         
         return jsonify({
             'success': True,
@@ -644,8 +733,4 @@ def download_results():
         return send_file(buf_protetto, as_attachment=True, download_name=filename,
                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         
-    except Exception as e:
-        return f"Errore: {e}", 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    except Exception
