@@ -15,6 +15,14 @@
       "azienda": "euxilia",
       "created_at": "2025-06-26T15:55:43.681833",
       "last_login": "2025-06-26T15:55:43.681843"
+    },
+    "cacsd.sxa@xva-services.com": {
+      "email": "cacsd.sxa@xva-services.com",
+      "nome": "Cacsd",
+      "cognome": "Sxa",
+      "azienda": "xva",
+      "created_at": "2025-06-26T15:56:50.908043",
+      "last_login": "2025-06-26T15:56:50.908123"
     }
   },
   "test_results": [
@@ -30,5 +38,5 @@
       "completed_at": "2025-06-26T15:50:28.826536"
     }
   ],
-  "last_updated": "2025-06-26T15:55:43.681979"
+  "last_updated": "2025-06-26T15:56:50.908360"
 }
