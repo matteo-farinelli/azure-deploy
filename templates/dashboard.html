@@ -1,11 +1,30 @@
+<!-- templates/dashboard.html - Versione aggiornata -->
 {% extends "base.html" %}
 
 {% block content %}
 <div class="container">
     <div class="row">
         <div class="col-12">
-            <h1 class="mb-4">Benvenuto, {{ utente }}!</h1>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>Benvenuto, {{ utente }}!</h1>
+                <div>
+                    <!-- Pulsante sincronizzazione manuale -->
+                    <button id="syncBtn" class="btn btn-outline-primary btn-sm me-2">
+                        <i class="fas fa-sync-alt"></i> Sincronizza
+                    </button>
+                    <!-- Status indicator -->
+                    <span id="syncStatus" class="badge bg-secondary">
+                        <i class="fas fa-circle"></i> Controllo...
+                    </span>
+                </div>
+            </div>
         </div>
+    </div>
+    
+    <!-- Alert per notifiche sync -->
+    <div id="syncAlert" class="alert alert-info d-none" role="alert">
+        <i class="fas fa-info-circle me-2"></i>
+        <span id="syncMessage">Sincronizzazione in corso...</span>
     </div>
     
     <!-- Statistiche -->
@@ -117,7 +136,7 @@
                                     <h6 class="mb-1">{{ test.test_name }}</h6>
                                     <small class="text-muted">
                                         <i class="fas fa-calendar me-1"></i>
-                                        {{ test.completed_at.split()[0] }}
+                                        {{ test.completed_at.split('T')[0] }}
                                     </small>
                                 </div>
                                 <div class="text-end">
@@ -139,5 +158,114 @@
             </div>
         </div>
     </div>
+    
+    <!-- Debug info (rimuovere in produzione) -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-header">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Debug Info - 
+                        <a href="/health" target="_blank" class="text-decoration-none">Health Check</a> | 
+                        <a href="/debug/storage" target="_blank" class="text-decoration-none">Storage Info</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const syncBtn = document.getElementById('syncBtn');
+    const syncStatus = document.getElementById('syncStatus');
+    const syncAlert = document.getElementById('syncAlert');
+    const syncMessage = document.getElementById('syncMessage');
+    
+    // Controlla status all'avvio
+    checkSyncStatus();
+    
+    // Pulsante sincronizzazione manuale
+    syncBtn.addEventListener('click', function() {
+        manualSync();
+    });
+    
+    // Controllo automatico ogni 30 secondi
+    setInterval(checkSyncStatus, 30000);
+    
+    async function checkSyncStatus() {
+        try {
+            const response = await fetch('/health');
+            const data = await response.json();
+            
+            if (data.github_configured && data.github_status === 'Connected') {
+                syncStatus.className = 'badge bg-success';
+                syncStatus.innerHTML = '<i class="fas fa-circle"></i> Sincronizzato';
+            } else if (data.github_configured && data.github_status === 'Error') {
+                syncStatus.className = 'badge bg-warning';
+                syncStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Errore Sync';
+            } else {
+                syncStatus.className = 'badge bg-secondary';
+                syncStatus.innerHTML = '<i class="fas fa-circle"></i> Solo Locale';
+            }
+        } catch (error) {
+            syncStatus.className = 'badge bg-danger';
+            syncStatus.innerHTML = '<i class="fas fa-times"></i> Errore';
+        }
+    }
+    
+    async function manualSync() {
+        // Disabilita pulsante
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizzando...';
+        
+        // Mostra alert
+        syncAlert.classList.remove('d-none');
+        syncMessage.textContent = 'Sincronizzazione con GitHub in corso...';
+        
+        try {
+            const response = await fetch('/sync');
+            const data = await response.json();
+            
+            if (data.success) {
+                syncAlert.className = 'alert alert-success';
+                syncMessage.innerHTML = `
+                    <i class="fas fa-check me-2"></i>
+                    Sincronizzazione completata! 
+                    ${data.users_count} utenti, ${data.results_count} risultati.
+                `;
+                
+                // Ricarica la pagina dopo 2 secondi
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                syncAlert.className = 'alert alert-danger';
+                syncMessage.innerHTML = `
+                    <i class="fas fa-times me-2"></i>
+                    Errore sincronizzazione: ${data.error}
+                `;
+            }
+        } catch (error) {
+            syncAlert.className = 'alert alert-danger';
+            syncMessage.innerHTML = `
+                <i class="fas fa-times me-2"></i>
+                Errore di connessione: ${error.message}
+            `;
+        } finally {
+            // Riabilita pulsante
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizza';
+            
+            // Nascondi alert dopo 5 secondi
+            setTimeout(() => {
+                syncAlert.classList.add('d-none');
+            }, 5000);
+        }
+    }
+});
+</script>
 {% endblock %}
