@@ -1,254 +1,212 @@
 {% extends "base.html" %}
 
-{% block title %}{{ test_name }} - Assessment Platform{% endblock %}
-
 {% block content %}
-<div class="alert alert-success">
-    Test '{{ test_name }}' caricato correttamente!
-</div>
-
-{% if not proseguito %}
-<h3>Inserisci i tuoi dati</h3>
-<form id="userForm">
-    <div class="form-group">
-        <label for="utente">Cognome e Nome (es. Rossi Mario):</label>
-        <input type="text" id="utente" name="utente" class="form-control" 
-               value="{{ utente }}" required {% if submitted %}disabled{% endif %}>
-    </div>
-    
-    <button type="submit" class="btn" {% if submitted %}disabled{% endif %}>Prosegui</button>
-</form>
-{% endif %}
-
-{% if proseguito and not submitted %}
-<h3>Rispondi alle seguenti domande:</h3>
-
-<form id="quizForm">
-    {% for domanda in domande %}
-    <div class="question-block">
-        <div class="question-title">{{ domanda.domanda }}</div>
-        <div class="question-subtitle">Argomento: {{ domanda.principio }}</div>
-        
-        {% if domanda.tipo == 'aperta' %}
-        <div class="form-group">
-            <textarea name="question_{{ domanda.id }}" id="question_{{ domanda.id }}" 
-                     class="form-control" rows="3" placeholder="Inserisci la tua risposta..."
-                     {% if submitted %}disabled{% endif %}></textarea>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="dashboard-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2>{{ test_name }}</h2>
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-building me-2"></i>{{ azienda|title }}
+                        </p>
+                    </div>
+                    <div class="badge bg-info fs-6">
+                        {{ domande|length }} domande
+                    </div>
+                </div>
+                
+                {% if not submitted %}
+                    <form id="quizForm">
+                        {% for domanda in domande %}
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <span class="badge bg-secondary me-2">{{ loop.index }}</span>
+                                        {{ domanda.domanda }}
+                                    </h5>
+                                    <small class="text-muted">
+                                        <i class="fas fa-tag me-1"></i>{{ domanda.principio }}
+                                    </small>
+                                </div>
+                                <div class="card-body">
+                                    {% if domanda.tipo == 'aperta' %}
+                                        <textarea class="form-control" 
+                                                  name="question_{{ domanda.id }}" 
+                                                  rows="4" 
+                                                  placeholder="Inserisci la tua risposta..."></textarea>
+                                    {% else %}
+                                        {% if domanda.multiple %}
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                Seleziona tutte le risposte corrette
+                                            </div>
+                                            {% for opzione in domanda.opzioni %}
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           name="question_{{ domanda.id }}" 
+                                                           value="{{ opzione }}" 
+                                                           id="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                    <label class="form-check-label" 
+                                                           for="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                        {{ opzione }}
+                                                    </label>
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            {% for opzione in domanda.opzioni %}
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" 
+                                                           type="radio" 
+                                                           name="question_{{ domanda.id }}" 
+                                                           value="{{ opzione }}" 
+                                                           id="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                    <label class="form-check-label" 
+                                                           for="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                        {{ opzione }}
+                                                    </label>
+                                                </div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Invia Risposte
+                            </button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="text-center">
+                        <div class="alert alert-success">
+                            <h4><i class="fas fa-check-circle me-2"></i>Test Completato!</h4>
+                            <p>Le tue risposte sono state salvate.</p>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <a href="{{ url_for('download_results') }}" class="btn btn-success me-2">
+                                <i class="fas fa-download me-2"></i>Scarica Risultati
+                            </a>
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                                <i class="fas fa-home me-2"></i>Dashboard
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-            {% if domanda.multiple %}
-            <div class="checkbox-group">
-                <small class="question-subtitle">(Risposte multiple)</small>
-                {% for opzione in domanda.opzioni %}
-                <div class="checkbox-option">
-                    <label>
-                        <input type="checkbox" name="question_{{ domanda.id }}" 
-                               value="{{ opzione }}" {% if submitted %}disabled{% endif %}>
-                        {{ opzione }}
-                    </label>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="radio-group">
-                {% for opzione in domanda.opzioni %}
-                <div class="radio-option">
-                    <label>
-                        <input type="radio" name="question_{{ domanda.id }}" 
-                               value="{{ opzione }}" {% if submitted %}disabled{% endif %}>
-                        {{ opzione }}
-                    </label>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        {% endif %}
     </div>
-    {% endfor %}
-    
-    <button type="submit" class="btn" {% if submitted %}disabled{% endif %}>Invia Risposte</button>
-</form>
-{% endif %}
-
-{% if submitted %}
-<div id="results">
-    <div class="alert alert-success">
-        <strong>Risposte inviate con successo!</strong>
-    </div>
-    
-    <div id="score-display" class="alert alert-success">
-        <!-- Il punteggio verrà mostrato qui via JavaScript o dal server -->
-    </div>
-    
-    <div style="margin-top: 20px;">
-        <a href="/download_results" class="btn" style="text-decoration: none; display: inline-block;">
-            Scarica il file Excel con le risposte
-        </a>
-        
-        <button onclick="window.location.href='/?reset=true'" class="btn" style="margin-left: 10px;">
-            Fai un altro test
-        </button>
-    </div>
-</div>
-
-<script>
-// Carica i risultati dal localStorage se disponibili
-$(document).ready(function() {
-    const results = localStorage.getItem('quiz_results');
-    if (results) {
-        const data = JSON.parse(results);
-        $('#score-display').html(
-            `<strong>Punteggio finale: ${data.correct} su ${data.total} (${data.score}%)</strong>`
-        );
-        // Pulisci il localStorage
-        localStorage.removeItem('quiz_results');
-    }
-});
-</script>
-{% endif %}
-
-<div class="loading" id="loading">
-    <p>Elaborazione in corso...</p>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-$(document).ready(function() {
-    // Form utente
-    $('#userForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        const utente = $('#utente').val().trim();
-        if (!utente) {
-            alert('Per favore, inserisci il tuo nome prima di proseguire.');
-            return;
-        }
-        
-        $('#loading').addClass('show');
-        $('button[type="submit"]').prop('disabled', true);
-        
-        $.ajax({
-            url: '/set_user',
-            method: 'POST',
-            data: {
-                utente: utente
-            },
-            success: function(response) {
-                if (response.success) {
-                    window.location.reload();
-                } else {
-                    alert(response.error || 'Errore nell\'inserimento del nome');
-                    $('#loading').removeClass('show');
-                    $('button[type="submit"]').prop('disabled', false);
-                }
-            },
-            error: function() {
-                alert('Errore di connessione');
-                $('#loading').removeClass('show');
-                $('button[type="submit"]').prop('disabled', false);
-            }
-        });
-    });
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('quizForm');
     
-    // Form quiz
-    $('#quizForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        // Raccogli tutte le risposte
-        const answers = {};
-        
-        // Domande aperte (textarea)
-        $('textarea[name^="question_"]').each(function() {
-            const name = $(this).attr('name');
-            answers[name] = $(this).val();
-        });
-        
-        // Domande a risposta singola (radio)
-        $('input[type="radio"]:checked').each(function() {
-            const name = $(this).attr('name');
-            answers[name] = $(this).val();
-        });
-        
-        // Domande a risposta multipla (checkbox)
-        const checkboxGroups = {};
-        $('input[type="checkbox"]:checked').each(function() {
-            const name = $(this).attr('name');
-            if (!checkboxGroups[name]) {
-                checkboxGroups[name] = [];
-            }
-            checkboxGroups[name].push($(this).val());
-        });
-        
-        // Aggiungi le risposte multiple all'oggetto answers
-        for (const [name, values] of Object.entries(checkboxGroups)) {
-            answers[name] = values;
-        }
-        
-        // Prepara i dati del quiz (per evitare problemi di sessione)
-        // Converte le domande dal formato template al formato originale pandas
-        const originalDomande = {{ domande | tojson }};
-        const convertedDomande = originalDomande.map(function(domanda) {
-            return {
-                'Domanda': domanda.domanda,
-                'principio': domanda.principio,
-                'opzione 1': domanda.opzioni && domanda.opzioni.length > 0 ? domanda.opzioni[0] : null,
-                'Corretta': domanda.corretta,
-                'tipo': domanda.tipo
-            };
-        });
-        
-        const quizData = {
-            utente: '{{ utente }}',
-            azienda_scelta: '{{ azienda }}',
-            test_scelto: '{{ test_name }}',
-            domande: convertedDomande
-        };
-        
-        const payload = {
-            answers: answers,
-            quiz_data: quizData
-        };
-        
-        $('#loading').addClass('show');
-        $('button[type="submit"]').prop('disabled', true);
-        
-        $.ajax({
-            url: '/submit_answers',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(payload),
-            success: function(response) {
-                $('#loading').removeClass('show');
-                
-                if (response.success) {
-                    // Salva i risultati nel localStorage per la pagina risultati
-                    localStorage.setItem('quiz_results', JSON.stringify(response.results_data));
-                    
-                    // Mostra il punteggio
-                    $('#score-display').html(
-                        `<strong>Punteggio finale: ${response.correct} su ${response.total} (${response.score}%)</strong>`
-                    );
-                    
-                    // Ricarica la pagina per mostrare i risultati
-                    window.location.reload();
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Raccolta risposte
+            const formData = new FormData(form);
+            const answers = {};
+            const checkboxGroups = {};
+            
+            for (let [key, value] of formData.entries()) {
+                if (form.querySelector(`input[name="${key}"][type="checkbox"]`)) {
+                    if (!checkboxGroups[key]) {
+                        checkboxGroups[key] = [];
+                    }
+                    checkboxGroups[key].push(value);
                 } else {
-                    if (response.reload) {
-                        alert(response.error + '\n\nLa pagina verrà ricaricata.');
-                        window.location.reload();
-                    } else {
-                        alert('Errore nell\'invio delle risposte: ' + (response.error || 'Errore sconosciuto'));
-                        $('button[type="submit"]').prop('disabled', false);
+                    answers[key] = value;
+                }
+            }
+            
+            Object.assign(answers, checkboxGroups);
+            
+            // Verifica risposte complete
+            const totalQuestions = {{ domande|length }};
+            const answeredQuestions = Object.keys(answers).length;
+            
+            if (answeredQuestions < totalQuestions) {
+                alert('Rispondi a tutte le domande prima di inviare.');
+                return;
+            }
+            
+            const submitData = {
+                answers: answers,
+                quiz_data: {
+                    utente: '{{ utente }}',
+                    azienda_scelta: '{{ azienda }}',
+                    test_scelto: '{{ test_name }}',
+                    domande: {{ domande|tojson }}
+                }
+            };
+            
+            // Disabilita form
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Invio...';
+            submitBtn.disabled = true;
+            
+            // Invia
+            fetch('/submit_answers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(submitData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Nascondi form
+                    form.style.display = 'none';
+                    
+                    // Mostra risultato
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'text-center';
+                    successDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h4><i class="fas fa-check-circle me-2"></i>Test Completato!</h4>
+                            <p>Punteggio: <strong>${data.score}%</strong> (${data.correct}/${data.total} corrette)</p>
+                        </div>
+                        <div class="mt-3">
+                            <a href="/download_results" class="btn btn-success me-2">
+                                <i class="fas fa-download me-2"></i>Scarica Risultati
+                            </a>
+                            <a href="/dashboard" class="btn btn-primary">
+                                <i class="fas fa-home me-2"></i>Dashboard
+                            </a>
+                        </div>
+                    `;
+                    
+                    document.querySelector('.dashboard-card').appendChild(successDiv);
+                } else {
+                    alert('Errore: ' + data.error);
+                    if (data.reload) {
+                        location.reload();
                     }
                 }
-            },
-            error: function() {
-                alert('Errore di connessione');
-                $('#loading').removeClass('show');
-                $('button[type="submit"]').prop('disabled', false);
-            }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                alert('Errore di connessione.');
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
         });
-    });
+    }
 });
 </script>
 {% endblock %}
