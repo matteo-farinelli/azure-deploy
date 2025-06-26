@@ -245,8 +245,8 @@ def get_logo_info(azienda_scelta=None):
 def get_company_color(azienda):
     colori = {
         "auxiell": "#6C757D",
-        "euxilia": "#0072C6", 
-        "xva": "#FFD700"
+        "euxilia": "#4A90C2", 
+        "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
 
