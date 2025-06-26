@@ -127,3 +127,72 @@
         }
         
         .info-section ul {
+            color: #666;
+            font-size: 14px;
+            padding-left: 20px;
+        }
+        
+        .info-section li {
+            margin-bottom: 5px;
+        }
+        
+        .security-note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo-section">
+            <h1>🏢 Assessment Platform</h1>
+            <p>Accedi con il tuo account aziendale Microsoft</p>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="company-info">
+            <h3>Domini Autorizzati</h3>
+            <p>• @auxiell.com<br>• @euxilia.com<br>• @xva.com</p>
+        </div>
+        
+        <a href="{{ auth_url }}" class="microsoft-btn">
+            <svg class="microsoft-icon" viewBox="0 0 23 23">
+                <path fill="#f35325" d="M1 1h10v10H1z"/>
+                <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                <path fill="#ffba08" d="M12 12h10v10H12z"/>
+            </svg>
+            Accedi con Microsoft
+        </a>
+        
+        <div class="info-section">
+            <h4>Come funziona:</h4>
+            <ul>
+                <li>Clicca su "Accedi con Microsoft"</li>
+                <li>Usa le tue credenziali aziendali</li>
+                <li>Accedi alla dashboard con i tuoi test</li>
+                <li>Completa i test assegnati</li>
+            </ul>
+        </div>
+        
+        <div class="security-note">
+            <strong>🔒 Sicurezza:</strong> L'accesso è limitato agli account aziendali autorizzati. 
+            I tuoi dati sono protetti e i risultati vengono salvati in modo sicuro.
+        </div>
+    </div>
+</body>
+</html>
