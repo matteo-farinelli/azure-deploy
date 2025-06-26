@@ -1,20 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}Errore - Assessment Platform{% endblock %}
-
 {% block content %}
-<div class="alert alert-error">
-    <h3>Si è verificato un errore</h3>
-    <p>{{ error }}</p>
-</div>
-
-<div style="margin-top: 20px;">
-    <button onclick="window.location.href='/?reset=true'" class="btn">
-        Ricomincia
-    </button>
-    
-    <button onclick="window.history.back()" class="btn" style="margin-left: 10px; background-color: #6c757d;">
-        Indietro
-    </button>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-exclamation-triangle fa-4x text-danger mb-4"></i>
+                <h2 class="mb-3">Errore</h2>
+                <p class="text-muted mb-4">{{ error }}</p>
+                <a href="{{ url_for('dashboard') if session.logged_in else url_for('login') }}" class="btn btn-primary">
+                    <i class="fas fa-home me-2"></i>
+                    {% if session.logged_in %}Dashboard{% else %}Login{% endif %}
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
