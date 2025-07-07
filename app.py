@@ -463,13 +463,17 @@ def show_quiz():
         option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
         
         for idx, row in enumerate(domande):
+            # Debug: verifica che la risposta corretta sia presente
+            corretta_originale = row.get('Corretta', '')
+            print(f"Domanda {idx}: Corretta = '{corretta_originale}'")
+            
             domanda_data = {
                 'id': idx,
                 'domanda': row['Domanda'],
                 'principio': row['principio'],
                 'tipo': 'aperta' if pd.isna(row.get("opzione 1")) or row.get("opzione 1") is None else 'chiusa',
                 'opzioni': [],
-                'corretta': row.get('Corretta', ''),
+                'corretta': corretta_originale,  # IMPORTANTE: include la risposta corretta
                 'multiple': False
             }
             
@@ -480,12 +484,15 @@ def show_quiz():
                         opzioni.append(str(row[col]))
                 domanda_data['opzioni'] = opzioni
                 
-                corretta_raw = row.get("Corretta", "")
+                # Verifica se è multipla
+                corretta_raw = corretta_originale
                 if corretta_raw is None or pd.isna(corretta_raw):
                     corretta_raw = ""
                 
                 corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
                 domanda_data['multiple'] = len(corrette) > 1
+                
+                print(f"Domanda {idx}: Opzioni = {opzioni}, Corrette = {corrette}, Multiple = {domanda_data['multiple']}")
             
             domande_formatted.append(domanda_data)
         
@@ -503,8 +510,11 @@ def show_quiz():
                              company_color=company_color)
         
     except Exception as e:
+        print(f"Errore show_quiz: {e}")
+        import traceback
+        traceback.print_exc()
         return render_template('error.html', error=f"Errore quiz: {e}")
-
+        
 @app.route('/submit_answers', methods=['POST'])
 @login_required
 def submit_answers():
@@ -520,7 +530,7 @@ def submit_answers():
         domande = quiz_data.get('domande', [])
         
         if not domande or not user_email:
-            return jsonify({'success': False, 'error': 'Dati mancanti'})
+            return jsonify({'success': False, 'error': 'Dati mancanti', 'reload': True})
         
         risposte = []
         
@@ -528,8 +538,19 @@ def submit_answers():
             answer_key = f'question_{idx}'
             user_answer = answers.get(answer_key, '')
             
-            opzione_1 = row.get("opzione 1")
-            if opzione_1 is None or str(opzione_1).lower() in ['nan', 'none', '']:
+            # Debug: stampa la domanda per verificare
+            print(f"Domanda {idx}: {row.get('domanda', '')}")
+            print(f"Risposta utente: {user_answer}")
+            print(f"Corretta dal form: {row.get('corretta', 'MISSING')}")
+            
+            # Verifica se è domanda aperta o chiusa
+            opzioni = row.get("opzioni", [])
+            tipo_domanda = row.get("tipo", "")
+            
+            print(f"Tipo: {tipo_domanda}, Opzioni: {opzioni}")
+            
+            if tipo_domanda == 'aperta' or not opzioni:
+                # Domanda aperta
                 risposte.append({
                     "Tipo": "aperta",
                     "Azienda": azienda_scelta,
@@ -537,25 +558,46 @@ def submit_answers():
                     "Domanda": row.get("domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": user_answer,
-                    "Corretta": None,
+                    "Corretta": "N/A - Domanda aperta",
                     "Esatta": None,
                     "Test": test_scelto
                 })
             else:
+                # Domanda chiusa - prendi la risposta corretta
                 corretta_raw = row.get("corretta", "")
-                if corretta_raw is None:
-                    corretta_raw = ""
                 
-                corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
+                # Se corretta_raw è vuoto, prova a prenderlo dal campo originale della domanda
+                if not corretta_raw or corretta_raw == "":
+                    print(f"⚠️ Risposta corretta vuota per domanda {idx}")
+                    print(f"Dati completi domanda: {row}")
+                    corretta_raw = "ERRORE - Risposta corretta mancante"
                 
-                if len(corrette) > 1:
+                print(f"Risposta corretta: {corretta_raw}")
+                
+                # Processa risposte corrette (potrebbero essere multiple)
+                if corretta_raw and corretta_raw != "ERRORE - Risposta corretta mancante":
+                    corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
+                else:
+                    corrette = []
+                
+                # Verifica se è multipla
+                is_multiple = row.get("multiple", False) or len(corrette) > 1
+                
+                if is_multiple:
+                    # Risposta multipla
                     user_answers = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
                     user_answers = [ans for ans in user_answers if ans]
-                    is_correct = set(user_answers) == set(corrette)
+                    is_correct = set(user_answers) == set(corrette) if corrette else False
                     risposta_str = ";".join(user_answers)
                 else:
+                    # Risposta singola
                     is_correct = user_answer in corrette if corrette else False
                     risposta_str = user_answer
+                
+                print(f"Corrette: {corrette}")
+                print(f"Risposta utente processata: {risposta_str}")
+                print(f"È corretta: {is_correct}")
+                print("---")
                 
                 risposte.append({
                     "Tipo": "chiusa",
@@ -576,6 +618,8 @@ def submit_answers():
         n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
         perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
+        print(f"Punteggio finale: {perc}% ({n_cor}/{n_tot})")
+        
         # Salva risultato
         result = {
             'user_email': user_email,
@@ -584,7 +628,7 @@ def submit_answers():
             'score': perc,
             'correct_answers': n_cor,
             'total_questions': n_tot,
-            'answers_json': json.dumps(risposte)
+            'answers_json': json.dumps(risposte, ensure_ascii=False)
         }
         
         save_test_result(result)
@@ -601,7 +645,9 @@ def submit_answers():
         })
         
     except Exception as e:
-        print(f"Submit error: {e}")
+        print(f"Errore submit: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/download_results')
