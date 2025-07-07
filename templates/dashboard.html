@@ -120,6 +120,8 @@
             </div>
         </div>
         
+<!-- Nel file templates/dashboard.html, aggiorna la sezione dei test completati: -->
+
         <!-- Test Completati -->
         <div class="col-md-6">
             <div class="dashboard-card">
@@ -140,14 +142,29 @@
                                     </small>
                                 </div>
                                 <div class="text-end">
-                                    <div class="badge bg-success fs-6">{{ test.score }}%</div>
-                                    <small class="d-block text-muted">
+                                    <div class="badge bg-success fs-6 mb-1">{{ test.score }}%</div>
+                                    <br>
+                                    <small class="d-block text-muted mb-2">
                                         {{ test.correct_answers }}/{{ test.total_questions }} corrette
                                     </small>
+                                    <!-- Pulsante Download -->
+                                    <a href="{{ url_for('download_results', test_name=test.test_name) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-download me-1"></i>Scarica
+                                    </a>
                                 </div>
                             </div>
                         </div>
                     {% endfor %}
+                    
+                    <!-- Pulsante per scaricare l'ultimo test -->
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('download_latest') }}" class="btn btn-success">
+                            <i class="fas fa-download me-2"></i>
+                            Scarica Ultimo Test Completato
+                        </a>
+                    </div>
+                    
                 {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
@@ -157,8 +174,6 @@
                 {% endif %}
             </div>
         </div>
-    </div>
-    
     <!-- Debug info (rimuovere in produzione) -->
     <div class="row mt-4">
         <div class="col-12">
