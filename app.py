@@ -433,7 +433,23 @@ def quiz():
 def show_quiz():
     try:
         file_path = session.get("file_path", "")
+        print(f"\n=== CARICAMENTO QUIZ ===")
+        print(f"File path: {file_path}")
+        
         df = pd.read_excel(file_path)
+        print(f"Excel caricato: {len(df)} righe, colonne: {list(df.columns)}")
+        
+        # Verifica che la colonna "Corretta" esista e abbia dati
+        if 'Corretta' in df.columns:
+            corrette_count = df['Corretta'].notna().sum()
+            print(f"Colonna 'Corretta' trovata: {corrette_count}/{len(df)} righe hanno dati")
+            
+            # Mostra alcuni esempi
+            sample_corrette = df['Corretta'].dropna().head(5).tolist()
+            print(f"Esempi risposte corrette: {sample_corrette}")
+        else:
+            print("⚠️ ERRORE: Colonna 'Corretta' non trovata!")
+            return render_template('error.html', error="Colonna 'Corretta' mancante nel file Excel")
         
         required_cols = ["Azienda", "principio", "Domanda", "Corretta", "opzione 1"]
         missing = [col for col in required_cols if col not in df.columns]
@@ -442,9 +458,14 @@ def show_quiz():
         
         azienda_scelta = session["azienda_scelta"]
         df_filtrato = df[df["Azienda"] == azienda_scelta]
+        print(f"Dopo filtro azienda '{azienda_scelta}': {len(df_filtrato)} righe")
         
         if df_filtrato.empty:
             return render_template('error.html', error=f"Nessuna domanda per {azienda_scelta}")
+        
+        # Verifica risposte corrette dopo il filtro
+        corrette_filtrate = df_filtrato['Corretta'].notna().sum()
+        print(f"Risposte corrette dopo filtro: {corrette_filtrate}/{len(df_filtrato)}")
         
         if session["domande_selezionate"] is None:
             if session["tutte_domande"]:
@@ -456,16 +477,29 @@ def show_quiz():
                                .reset_index(drop=True)
                 )
             session["domande_selezionate"] = domande_selezionate.to_dict('records')
+            
+            print(f"Domande selezionate: {len(domande_selezionate)}")
+            
+            # Debug: verifica che le risposte corrette siano nelle domande selezionate
+            domande_dict = domande_selezionate.to_dict('records')
+            for i, domanda in enumerate(domande_dict):
+                corretta = domanda.get('Corretta', 'MISSING')
+                print(f"Domanda {i}: Corretta = '{corretta}' (type: {type(corretta)})")
         
         domande = session["domande_selezionate"]
+        print(f"Domande dalla sessione: {len(domande)}")
         
         domande_formatted = []
         option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
         
         for idx, row in enumerate(domande):
-            # Debug: verifica che la risposta corretta sia presente
             corretta_originale = row.get('Corretta', '')
-            print(f"Domanda {idx}: Corretta = '{corretta_originale}'")
+            
+            # DEBUG CRITICO: Verifica il valore della risposta corretta
+            print(f"\n--- DOMANDA {idx} ---")
+            print(f"Corretta originale: '{corretta_originale}' (type: {type(corretta_originale)})")
+            print(f"È null/nan: {pd.isna(corretta_originale) if pd else 'N/A'}")
+            print(f"È stringa vuota: {corretta_originale == ''}")
             
             domanda_data = {
                 'id': idx,
@@ -473,7 +507,7 @@ def show_quiz():
                 'principio': row['principio'],
                 'tipo': 'aperta' if pd.isna(row.get("opzione 1")) or row.get("opzione 1") is None else 'chiusa',
                 'opzioni': [],
-                'corretta': corretta_originale,  # IMPORTANTE: include la risposta corretta
+                'corretta': corretta_originale,  # MANTIENI IL VALORE ORIGINALE
                 'multiple': False
             }
             
@@ -484,17 +518,20 @@ def show_quiz():
                         opzioni.append(str(row[col]))
                 domanda_data['opzioni'] = opzioni
                 
-                # Verifica se è multipla
-                corretta_raw = corretta_originale
-                if corretta_raw is None or pd.isna(corretta_raw):
-                    corretta_raw = ""
-                
-                corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
-                domanda_data['multiple'] = len(corrette) > 1
-                
-                print(f"Domanda {idx}: Opzioni = {opzioni}, Corrette = {corrette}, Multiple = {domanda_data['multiple']}")
+                # Verifica se è multipla SOLO se abbiamo una risposta corretta valida
+                if corretta_originale and not pd.isna(corretta_originale) and str(corretta_originale).strip():
+                    corrette = [c.strip() for c in str(corretta_originale).split(";") if c.strip()]
+                    domanda_data['multiple'] = len(corrette) > 1
+                    print(f"Opzioni: {opzioni}")
+                    print(f"Corrette split: {corrette}")
+                    print(f"Multiple: {domanda_data['multiple']}")
+                else:
+                    print("⚠️ PROBLEMA: Risposta corretta vuota o invalida!")
+                    domanda_data['corretta'] = "ERRORE - Risposta mancante nel file Excel"
             
             domande_formatted.append(domanda_data)
+        
+        print(f"=== QUIZ PRONTO: {len(domande_formatted)} domande ===")
         
         logo_path, logo_exists = get_logo_info(session["azienda_scelta"])
         company_color = get_company_color(session["azienda_scelta"])
@@ -650,9 +687,57 @@ def submit_answers():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
-# Nel file app.py, sostituisci la route download_results con questa versione corretta:
+# Aggiungi questo endpoint di debug per verificare cosa succede alle risposte corrette:
 
-# Nel file app.py, sostituisci la route download_results con questa:
+@app.route('/debug/quiz_data')
+@login_required
+def debug_quiz_data():
+    """Debug per verificare i dati del quiz e le risposte corrette"""
+    try:
+        # Leggi direttamente dal file Excel
+        file_path = session.get("file_path", "")
+        if not file_path:
+            return jsonify({'error': 'Nessun file path in sessione'})
+        
+        print(f"Leggendo file: {file_path}")
+        df = pd.read_excel(file_path)
+        
+        azienda_scelta = session.get("azienda_scelta")
+        df_filtrato = df[df["Azienda"] == azienda_scelta]
+        
+        debug_info = {
+            'file_path': file_path,
+            'total_rows': len(df),
+            'filtered_rows': len(df_filtrato),
+            'columns': list(df.columns),
+            'azienda_filter': azienda_scelta,
+            'sample_data': []
+        }
+        
+        # Prendi le prime 5 domande per debug
+        for idx, row in df_filtrato.head(5).iterrows():
+            sample = {
+                'index': idx,
+                'domanda': row.get('Domanda', 'N/A')[:100],
+                'corretta_raw': row.get('Corretta', 'MISSING'),
+                'corretta_type': str(type(row.get('Corretta', None))),
+                'opzione_1': row.get('opzione 1', 'N/A'),
+                'principio': row.get('principio', 'N/A'),
+                'all_columns_for_this_row': {}
+            }
+            
+            # Mostra tutti i valori per questa riga
+            for col in df.columns:
+                sample['all_columns_for_this_row'][col] = str(row.get(col, 'N/A'))
+            
+            debug_info['sample_data'].append(sample)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/download_results')
 @app.route('/download_results/<test_name>')
@@ -817,3 +902,4 @@ except Exception as e:
 
 if __name__ == '__main__':
     app.run(debug=True)
+
