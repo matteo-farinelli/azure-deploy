@@ -652,157 +652,138 @@ def submit_answers():
 
 # Nel file app.py, sostituisci la route download_results con questa versione corretta:
 
+# Nel file app.py, sostituisci la route download_results con questa:
+
 @app.route('/download_results')
+@app.route('/download_results/<test_name>')
 @login_required
-def download_results():
+def download_results(test_name=None):
     try:
         print("=== DOWNLOAD RESULTS START ===")
+        user_email = session.get('user_email')
         
-        # Debug: verifica dati sessione
-        print(f"Session submitted: {session.get('submitted')}")
-        print(f"Session keys: {list(session.keys())}")
-        print(f"Risposte in sessione: {'risposte' in session}")
+        if not user_email:
+            return "Utente non identificato.", 404
         
-        # Verifica se abbiamo i dati nella sessione
-        if not session.get("submitted"):
-            print("ERROR: Test non ancora completato")
-            return "Test non ancora completato. Completa prima il test.", 404
-        
-        if "risposte" not in session:
-            print("ERROR: Nessuna risposta trovata in sessione")
-            # Proviamo a recuperare dal database
-            user_email = session.get('user_email')
-            if user_email:
-                # Prendi l'ultimo test completato
-                user_results = get_user_test_results(user_email)
-                if user_results:
-                    latest_result = user_results[0]  # Il più recente
-                    try:
-                        risposte = json.loads(latest_result.get('answers_json', '[]'))
-                        if risposte:
-                            session["risposte"] = risposte
-                            session["submitted"] = True
-                            session.modified = True
-                            print(f"✓ Recuperate {len(risposte)} risposte dal database")
-                        else:
-                            return "Nessuna risposta trovata nel database.", 404
-                    except Exception as e:
-                        print(f"Errore parsing JSON: {e}")
-                        return "Errore nel recupero delle risposte.", 500
-                else:
-                    return "Nessun test completato trovato.", 404
+        # Se non specificato un test, prendi l'ultimo
+        if not test_name:
+            # Prova prima dalla sessione
+            if session.get("submitted") and "risposte" in session:
+                print("Usando dati dalla sessione")
+                risposte = session["risposte"]
+                test_name = session.get("test_scelto", "Test")
             else:
-                return "Utente non identificato.", 404
+                # Prendi l'ultimo test dal database
+                print("Recuperando ultimo test dal database")
+                user_results = get_user_test_results(user_email)
+                if not user_results:
+                    return "Nessun test completato trovato. Completa prima un test.", 404
+                
+                latest_result = user_results[0]
+                test_name = latest_result.get('test_name', 'Test')
+                
+                try:
+                    risposte = json.loads(latest_result.get('answers_json', '[]'))
+                    if not risposte:
+                        return "Dati del test non disponibili.", 404
+                except Exception as e:
+                    print(f"Errore parsing JSON: {e}")
+                    return "Errore nel recupero dei dati del test.", 500
+        else:
+            # Test specifico richiesto
+            print(f"Cercando test specifico: {test_name}")
+            user_results = get_user_test_results(user_email)
+            found_result = None
+            
+            for result in user_results:
+                if result.get('test_name') == test_name:
+                    found_result = result
+                    break
+            
+            if not found_result:
+                return f"Test '{test_name}' non trovato.", 404
+            
+            try:
+                risposte = json.loads(found_result.get('answers_json', '[]'))
+                if not risposte:
+                    return "Dati del test non disponibili.", 404
+            except Exception as e:
+                print(f"Errore parsing JSON: {e}")
+                return "Errore nel recupero dei dati del test.", 500
         
-        risposte = session["risposte"]
-        utente = session.get("utente", "Utente Sconosciuto")
+        utente = session.get("utente", "Utente")
+        azienda = session.get("azienda_scelta", "")
         
-        print(f"Risposte da processare: {len(risposte)}")
-        
-        # Verifica che risposte sia una lista valida
-        if not isinstance(risposte, list) or len(risposte) == 0:
-            print("ERROR: Risposte non valide")
-            return "Dati delle risposte non validi.", 500
+        print(f"Generando report per: {utente}, Test: {test_name}, Risposte: {len(risposte)}")
         
         # Crea DataFrame
-        try:
-            df_r = pd.DataFrame(risposte)
-            print(f"DataFrame creato con {len(df_r)} righe")
-            print(f"Colonne DataFrame: {list(df_r.columns)}")
-            
-        except Exception as e:
-            print(f"Errore creazione DataFrame: {e}")
-            return f"Errore nella creazione del report: {e}", 500
+        df_r = pd.DataFrame(risposte)
         
         # Calcola punteggio
-        try:
-            chiuse = df_r[df_r["Tipo"] == "chiusa"]
-            n_tot = len(chiuse)
-            n_cor = int(chiuse["Esatta"].sum()) if n_tot else 0
-            perc = int(n_cor / n_tot * 100) if n_tot else 0
-            
-            print(f"Punteggio calcolato: {perc}% ({n_cor}/{n_tot})")
-            
-        except Exception as e:
-            print(f"Errore calcolo punteggio: {e}")
-            n_tot = n_cor = perc = 0
+        chiuse = df_r[df_r["Tipo"] == "chiusa"]
+        n_tot = len(chiuse)
+        n_cor = int(chiuse["Esatta"].sum()) if n_tot else 0
+        perc = int(n_cor / n_tot * 100) if n_tot else 0
+        
+        print(f"Punteggio: {perc}% ({n_cor}/{n_tot})")
         
         # Crea info sheet
-        try:
-            data_test = datetime.now().strftime("%d/%m/%Y %H:%M")
-            info = pd.DataFrame([{
-                "Nome": utente,
-                "Data": data_test,
-                "Punteggio": f"{perc}%",
-                "Risposte Corrette": f"{n_cor}/{n_tot}",
-                "Azienda": session.get("azienda_scelta", "N/A"),
-                "Test": session.get("test_scelto", "N/A")
-            }])
-            
-            print("Info sheet creato")
-            
-        except Exception as e:
-            print(f"Errore creazione info: {e}")
-            return f"Errore nella creazione delle informazioni: {e}", 500
+        data_test = datetime.now().strftime("%d/%m/%Y %H:%M")
+        info = pd.DataFrame([{
+            "Nome": utente,
+            "Email": user_email,
+            "Data Download": data_test,
+            "Test": test_name,
+            "Azienda": azienda,
+            "Punteggio": f"{perc}%",
+            "Risposte Corrette": f"{n_cor}/{n_tot}",
+            "Totale Domande": n_tot
+        }])
         
         # Crea file Excel
-        try:
-            buf = BytesIO()
-            
-            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                # Sheet riassunto
-                info.to_excel(writer, index=False, sheet_name="Riassunto", startrow=0)
-                
-                # Sheet dettaglio risposte - aggiungi punteggio
-                df_export = df_r.copy()
-                df_export["Punteggio"] = f"{perc}%"
-                df_export.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
-            
-            print("Excel creato")
-            
-        except Exception as e:
-            print(f"Errore creazione Excel: {e}")
-            return f"Errore nella creazione del file Excel: {e}", 500
+        buf = BytesIO()
         
-        # Proteggi il foglio
-        try:
-            buf.seek(0)
-            wb = load_workbook(buf)
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Sheet riassunto
+            info.to_excel(writer, index=False, sheet_name="Riassunto", startrow=0)
             
-            # Proteggi il sheet riassunto
-            if "Riassunto" in wb.sheetnames:
-                ws = wb["Riassunto"]
-                ws.protection.sheet = True
-                ws.protection.password = "assessment25"
-                ws.protection.enable()
+            # Sheet dettaglio - pulisci e organizza i dati
+            df_export = df_r.copy()
             
-            # Buffer finale
-            buf_protetto = BytesIO()
-            wb.save(buf_protetto)
-            buf_protetto.seek(0)
+            # Riordina colonne per leggibilità
+            column_order = ["Tipo", "Azienda", "Utente", "Test", "Argomento", "Domanda", "Risposta", "Corretta", "Esatta"]
+            existing_columns = [col for col in column_order if col in df_export.columns]
+            other_columns = [col for col in df_export.columns if col not in column_order]
+            final_columns = existing_columns + other_columns
             
-            print("File protetto creato")
-            
-        except Exception as e:
-            print(f"Errore protezione file: {e}")
-            # Se la protezione fallisce, usa il file non protetto
-            buf.seek(0)
-            buf_protetto = buf
+            df_export = df_export[final_columns]
+            df_export.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
+        
+        # Proteggi il foglio riassunto
+        buf.seek(0)
+        wb = load_workbook(buf)
+        
+        if "Riassunto" in wb.sheetnames:
+            ws = wb["Riassunto"]
+            ws.protection.sheet = True
+            ws.protection.password = "assessment25"
+            ws.protection.enable()
+        
+        buf_protetto = BytesIO()
+        wb.save(buf_protetto)
+        buf_protetto.seek(0)
         
         # Nome file
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            nome_sicuro = re.sub(r'[^\w\s-]', '', utente).strip()
-            nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
-            filename = f"risultati_{nome_sicuro}_{timestamp}.xlsx"
-            
-            print(f"Filename: {filename}")
-            
-        except Exception as e:
-            print(f"Errore nome file: {e}")
-            filename = f"risultati_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', utente).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        test_sicuro = re.sub(r'[^\w\s-]', '', test_name).strip()
+        test_sicuro = re.sub(r'[-\s]+', '_', test_sicuro)
         
-        print("=== DOWNLOAD RESULTS SUCCESS ===")
+        filename = f"risultati_{nome_sicuro}_{test_sicuro}_{timestamp}.xlsx"
+        
+        print(f"Download file: {filename}")
+        print("=== DOWNLOAD SUCCESS ===")
         
         return send_file(
             buf_protetto,
@@ -812,40 +793,20 @@ def download_results():
         )
         
     except Exception as e:
-        print(f"=== DOWNLOAD RESULTS ERROR ===")
+        print(f"=== DOWNLOAD ERROR ===")
         print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         return f"Errore durante il download: {e}", 500
 
 
-# Inoltre, aggiungiamo un endpoint per verificare i dati di sessione:
-@app.route('/debug/session')
-@login_required  
-def debug_session():
-    """Debug endpoint per verificare dati sessione"""
-    try:
-        session_data = {
-            'submitted': session.get('submitted'),
-            'user_email': session.get('user_email'),
-            'utente': session.get('utente'),
-            'test_scelto': session.get('test_scelto'),
-            'azienda_scelta': session.get('azienda_scelta'),
-            'has_risposte': 'risposte' in session,
-            'risposte_count': len(session.get('risposte', [])),
-            'session_keys': list(session.keys())
-        }
-        
-        return jsonify({
-            'success': True,
-            'session_data': session_data
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# Aggiungiamo anche un endpoint per scaricare test specifici dalla dashboard
+@app.route('/download_latest')
+@login_required
+def download_latest():
+    """Download dell'ultimo test completato"""
+    return download_results()
+
 # Inizializzazione sicura all'avvio
 try:
     print("=== Avvio App ===")
