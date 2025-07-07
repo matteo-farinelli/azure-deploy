@@ -551,7 +551,85 @@ def show_quiz():
         import traceback
         traceback.print_exc()
         return render_template('error.html', error=f"Errore quiz: {e}")
-        
+def clean_text(text):
+    """Pulizia ultra-robusta del testo"""
+    if text is None:
+        return ""
+    
+    # Converti a stringa
+    text = str(text)
+    
+    # Rimuovi tutti i tipi di spazi
+    import unicodedata
+    
+    # Normalizza Unicode
+    text = unicodedata.normalize('NFKD', text)
+    
+    # Rimuovi caratteri di controllo e spazi speciali
+    text = ''.join(char for char in text if not unicodedata.category(char).startswith('C'))
+    
+    # Rimuovi spazi all'inizio e fine
+    text = text.strip()
+    
+    # Sostituisci spazi multipli con uno singolo
+    import re
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Converti a minuscolo
+    text = text.lower()
+    
+    return text
+
+def answers_match(user_answer, correct_answer):
+    """Confronto ultra-robusto delle risposte"""
+    
+    # Pulizia robusta
+    user_clean = clean_text(user_answer)
+    correct_clean = clean_text(correct_answer)
+    
+    print(f"  DEBUG MATCH:")
+    print(f"    User RAW: '{user_answer}' (len: {len(str(user_answer)) if user_answer else 0})")
+    print(f"    User CLEAN: '{user_clean}' (len: {len(user_clean)})")
+    print(f"    Correct RAW: '{correct_answer}' (len: {len(str(correct_answer)) if correct_answer else 0})")
+    print(f"    Correct CLEAN: '{correct_clean}' (len: {len(correct_clean)})")
+    
+    # Confronto diretto
+    if user_clean == correct_clean:
+        print(f"    MATCH: Confronto diretto ✓")
+        return True
+    
+    # Confronto byte-by-byte per debug
+    if len(user_clean) == len(correct_clean):
+        for i, (u, c) in enumerate(zip(user_clean, correct_clean)):
+            if u != c:
+                print(f"    DIFF at pos {i}: '{u}' (ord:{ord(u)}) vs '{c}' (ord:{ord(c)})")
+                break
+    else:
+        print(f"    DIFF: Lunghezze diverse {len(user_clean)} vs {len(correct_clean)}")
+    
+    # Confronto per varianti booleane
+    true_variants = ['vero', 'true', 'si', 'sì', 'yes', '1', 'corretto', 'giusto']
+    false_variants = ['falso', 'false', 'no', '0', 'sbagliato', 'errato']
+    
+    if user_clean in true_variants and correct_clean in true_variants:
+        print(f"    MATCH: Entrambi TRUE variants ✓")
+        return True
+    if user_clean in false_variants and correct_clean in false_variants:
+        print(f"    MATCH: Entrambi FALSE variants ✓")
+        return True
+    
+    # Confronto senza spazi e punteggiatura
+    import re
+    user_minimal = re.sub(r'[^\w]', '', user_clean)
+    correct_minimal = re.sub(r'[^\w]', '', correct_clean)
+    
+    if user_minimal == correct_minimal:
+        print(f"    MATCH: Minimal comparison ✓")
+        return True
+    
+    print(f"    NO MATCH ✗")
+    return False
+    
 @app.route('/submit_answers', methods=['POST'])
 @login_required
 def submit_answers():
@@ -575,16 +653,13 @@ def submit_answers():
             answer_key = f'question_{idx}'
             user_answer = answers.get(answer_key, '')
             
-            # Debug: stampa la domanda per verificare
-            print(f"Domanda {idx}: {row.get('domanda', '')}")
-            print(f"Risposta utente: {user_answer}")
-            print(f"Corretta dal form: {row.get('corretta', 'MISSING')}")
+            print(f"\n=== DOMANDA {idx} ===")
+            print(f"Domanda: {row.get('domanda', '')[:100]}...")
+            print(f"Risposta utente RAW: '{user_answer}' (type: {type(user_answer)})")
             
             # Verifica se è domanda aperta o chiusa
             opzioni = row.get("opzioni", [])
             tipo_domanda = row.get("tipo", "")
-            
-            print(f"Tipo: {tipo_domanda}, Opzioni: {opzioni}")
             
             if tipo_domanda == 'aperta' or not opzioni:
                 # Domanda aperta
@@ -594,47 +669,72 @@ def submit_answers():
                     "Utente": utente,
                     "Domanda": row.get("domanda", ""),
                     "Argomento": row.get("principio", ""),
-                    "Risposta": user_answer,
+                    "Risposta": str(user_answer) if user_answer else "",
                     "Corretta": "N/A - Domanda aperta",
                     "Esatta": None,
                     "Test": test_scelto
                 })
+                print("Tipo: APERTA")
+                
             else:
-                # Domanda chiusa - prendi la risposta corretta
+                # Domanda chiusa
                 corretta_raw = row.get("corretta", "")
+                print(f"Risposta corretta RAW: '{corretta_raw}' (type: {type(corretta_raw)})")
                 
-                # Se corretta_raw è vuoto, prova a prenderlo dal campo originale della domanda
-                if not corretta_raw or corretta_raw == "":
-                    print(f"⚠️ Risposta corretta vuota per domanda {idx}")
-                    print(f"Dati completi domanda: {row}")
+                if not corretta_raw or pd.isna(corretta_raw):
+                    print("⚠️ Risposta corretta mancante!")
                     corretta_raw = "ERRORE - Risposta corretta mancante"
-                
-                print(f"Risposta corretta: {corretta_raw}")
                 
                 # Processa risposte corrette (potrebbero essere multiple)
                 if corretta_raw and corretta_raw != "ERRORE - Risposta corretta mancante":
-                    corrette = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
+                    corrette_list = [c.strip() for c in str(corretta_raw).split(";") if c.strip()]
                 else:
-                    corrette = []
+                    corrette_list = []
+                
+                print(f"Risposte corrette split: {corrette_list}")
                 
                 # Verifica se è multipla
-                is_multiple = row.get("multiple", False) or len(corrette) > 1
+                is_multiple = row.get("multiple", False) or len(corrette_list) > 1
+                print(f"È multipla: {is_multiple}")
                 
                 if is_multiple:
                     # Risposta multipla
-                    user_answers = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
-                    user_answers = [ans for ans in user_answers if ans]
-                    is_correct = set(user_answers) == set(corrette) if corrette else False
-                    risposta_str = ";".join(user_answers)
+                    user_answers_list = user_answer if isinstance(user_answer, list) else [user_answer] if user_answer else []
+                    user_answers_list = [ans for ans in user_answers_list if ans]
+                    
+                    print(f"Risposte utente (lista): {user_answers_list}")
+                    
+                    # Confronto per risposte multiple usando la nuova funzione
+                    matches = []
+                    for user_ans in user_answers_list:
+                        for correct_ans in corrette_list:
+                            if answers_match(user_ans, correct_ans):
+                                matches.append(user_ans)
+                                break
+                    
+                    # È corretta se tutte le risposte utente matchano e sono nel numero giusto
+                    is_correct = len(matches) == len(user_answers_list) == len(corrette_list)
+                    risposta_str = ";".join(user_answers_list)
+                    
                 else:
                     # Risposta singola
-                    is_correct = user_answer in corrette if corrette else False
-                    risposta_str = user_answer
+                    print(f"Risposta singola - User: '{user_answer}', Correct: {corrette_list}")
+                    
+                    is_correct = False
+                    if corrette_list:
+                        for correct_option in corrette_list:
+                            print(f"  Confrontando '{user_answer}' con '{correct_option}'")
+                            if answers_match(user_answer, correct_option):
+                                is_correct = True
+                                print(f"  ✓ MATCH trovato!")
+                                break
+                            else:
+                                print(f"  ✗ No match")
+                    
+                    risposta_str = str(user_answer) if user_answer else ""
                 
-                print(f"Corrette: {corrette}")
-                print(f"Risposta utente processata: {risposta_str}")
-                print(f"È corretta: {is_correct}")
-                print("---")
+                print(f"RISULTATO: {'✓ CORRETTO' if is_correct else '✗ SBAGLIATO'}")
+                print(f"Risposta finale: '{risposta_str}'")
                 
                 risposte.append({
                     "Tipo": "chiusa",
@@ -643,19 +743,34 @@ def submit_answers():
                     "Domanda": row.get("domanda", ""),
                     "Argomento": row.get("principio", ""),
                     "Risposta": risposta_str,
-                    "Corretta": corretta_raw,
+                    "Corretta": str(corretta_raw),
                     "Esatta": is_correct,
                     "Test": test_scelto
                 })
         
         # Calcola punteggio
+        print("\n=== CALCOLO PUNTEGGIO ===")
         df_r = pd.DataFrame(risposte)
         chiuse = df_r[df_r["Tipo"] == "chiusa"]
         n_tot = len(chiuse)
-        n_cor = int(chiuse["Esatta"].sum()) if n_tot > 0 else 0
-        perc = int(n_cor / n_tot * 100) if n_tot > 0 else 0
         
-        print(f"Punteggio finale: {perc}% ({n_cor}/{n_tot})")
+        if n_tot > 0:
+            n_cor = int(chiuse["Esatta"].sum())
+            perc = int(n_cor / n_tot * 100)
+            
+            print(f"Domande chiuse: {n_tot}")
+            print(f"Risposte corrette: {n_cor}")
+            print(f"Percentuale: {perc}%")
+            
+            # Mostra dettaglio risposte sbagliate
+            sbagliate = chiuse[chiuse["Esatta"] == False]
+            if len(sbagliate) > 0:
+                print(f"\nRisposte SBAGLIATE ({len(sbagliate)}):")
+                for _, risposta in sbagliate.iterrows():
+                    print(f"- Domanda: {risposta['Domanda'][:50]}...")
+                    print(f"  User: '{risposta['Risposta']}' | Correct: '{risposta['Corretta']}'")
+        else:
+            n_cor = perc = 0
         
         # Salva risultato
         result = {
@@ -674,6 +789,8 @@ def submit_answers():
         session["risposte"] = risposte
         session.modified = True
         
+        print(f"\n=== SUBMIT SUCCESS: {perc}% ({n_cor}/{n_tot}) ===")
+        
         return jsonify({
             'success': True,
             'score': perc,
@@ -682,12 +799,11 @@ def submit_answers():
         })
         
     except Exception as e:
-        print(f"Errore submit: {e}")
+        print(f"=== SUBMIT ERROR ===")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
-
-# Aggiungi questo endpoint di debug per verificare cosa succede alle risposte corrette:
 
 @app.route('/debug/quiz_data')
 @login_required
