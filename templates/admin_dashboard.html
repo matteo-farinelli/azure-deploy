@@ -1,0 +1,272 @@
+<!-- templates/admin_dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard Admin - Assessment App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-shield-alt me-2"></i>Dashboard Amministrativa</h1>
+                <div>
+                    <a href="{{ url_for('admin_download_report') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-download me-2"></i>Scarica Report Completo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Alert Admin -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Modalità Amministratore</strong> - Hai accesso a tutti i dati e statistiche del sistema.
+    </div>
+    
+    <!-- Statistiche Generali -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Utenti Totali</h5>
+                        <div class="stats-number">{{ total_users }}</div>
+                    </div>
+                    <i class="fas fa-users fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Test Completati</h5>
+                        <div class="stats-number">{{ total_tests }}</div>
+                    </div>
+                    <i class="fas fa-clipboard-check fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Aziende Attive</h5>
+                        <div class="stats-number">{{ stats_per_azienda|length }}</div>
+                    </div>
+                    <i class="fas fa-building fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Media Test/Utente</h5>
+                        <div class="stats-number">
+                            {% if total_users > 0 %}
+                                {{ "%.1f"|format(total_tests / total_users) }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="fas fa-chart-bar fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Statistiche per Azienda -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h3 class="mb-3">
+                    <i class="fas fa-chart-pie text-primary me-2"></i>
+                    Statistiche per Azienda
+                </h3>
+                
+                {% if stats_per_azienda %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Azienda</th>
+                                    <th class="text-center">Utenti</th>
+                                    <th class="text-center">Test</th>
+                                    <th class="text-center">Test/Utente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for azienda, stats in stats_per_azienda.items() %}
+                                <tr>
+                                    <td>
+                                        <span class="badge" style="background-color: 
+                                            {% if azienda == 'auxiell' %}#6C757D
+                                            {% elif azienda == 'euxilia' %}#4A90C2
+                                            {% elif azienda == 'xva' %}#D4AF37
+                                            {% else %}#6C757D{% endif %}">
+                                            {{ azienda|title }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">{{ stats.users }}</td>
+                                    <td class="text-center">{{ stats.tests }}</td>
+                                    <td class="text-center">
+                                        {% if stats.users > 0 %}
+                                            {{ "%.1f"|format(stats.tests / stats.users) }}
+                                        {% else %}
+                                            0
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Nessun dato disponibile</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Test Recenti -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h3 class="mb-3">
+                    <i class="fas fa-clock text-warning me-2"></i>
+                    Test Recenti
+                </h3>
+                
+                {% if recent_tests %}
+                    <div class="list-group list-group-flush">
+                        {% for test in recent_tests %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ test.user_name }}</h6>
+                                        <p class="mb-1 small">{{ test.test_name }}</p>
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>
+                                            {{ test.completed_at.split('T')[0] }}
+                                            <span class="ms-2">
+                                                <i class="fas fa-building me-1"></i>
+                                                {{ test.azienda|title }}
+                                            </span>
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-{% if test.score >= 80 %}success{% elif test.score >= 60 %}warning{% else %}danger{% endif %} fs-6">
+                                            {{ test.score }}%
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">
+                                            {{ test.correct_answers }}/{{ test.total_questions }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            Mostrando gli ultimi 10 test completati
+                        </small>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Nessun test recente</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Azioni Admin -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="dashboard-card">
+                <h3 class="mb-3">
+                    <i class="fas fa-tools text-info me-2"></i>
+                    Azioni Amministrative
+                </h3>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
+                                <h5>Report Completo</h5>
+                                <p class="text-muted">Scarica Excel con tutti i test svolti</p>
+                                <a href="{{ url_for('admin_download_report') }}" class="btn btn-success">
+                                    <i class="fas fa-download me-1"></i>Scarica
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-sync-alt fa-3x text-primary mb-3"></i>
+                                <h5>Sincronizza Dati</h5>
+                                <p class="text-muted">Aggiorna dati da GitHub</p>
+                                <button class="btn btn-primary" onclick="syncData()">
+                                    <i class="fas fa-sync-alt me-1"></i>Sincronizza
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                                <h5>Dashboard Utente</h5>
+                                <p class="text-muted">Vai alla dashboard normale</p>
+                                <a href="{{ url_for('dashboard') }}" class="btn btn-info">
+                                    <i class="fas fa-user me-1"></i>Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function syncData() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizzando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/sync');
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`Sincronizzazione completata!\nUtenti: ${data.users_count}\nRisultati: ${data.results_count}`);
+            location.reload();
+        } else {
+            alert('Errore durante la sincronizzazione: ' + data.error);
+        }
+    } catch (error) {
+        alert('Errore di connessione: ' + error.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %>
