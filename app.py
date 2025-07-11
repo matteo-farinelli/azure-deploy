@@ -202,8 +202,13 @@ def save_test_result(result):
     save_progress_data(data)
 
 def validate_email(email):
-    pattern = r'^[a-zA-Z]+\.[a-zA-Z]+@(auxiell|euxilia|xva-services)\.com$'
-    return re.match(pattern, email) is not None
+    """Valida email aziendale inclusi admin"""
+    # Pattern per utenti normali
+    normal_pattern = r'^[a-zA-Z]+\.[a-zA-Z]+@(auxiell|euxilia|xva-services)\.com$'
+    # Pattern per admin
+    admin_pattern = r'^admin@(auxiell|euxilia|xva-services)\.com$'
+    
+    return re.match(normal_pattern, email) or re.match(admin_pattern, email)
 
 def extract_company_from_email(email):
     if '@auxiell.com' in email:
@@ -215,6 +220,10 @@ def extract_company_from_email(email):
     return None
 
 def extract_name_from_email(email):
+    """Estrae nome e cognome dall'email"""
+    if email.startswith('admin@'):
+        return "Admin", "Sistema"
+    
     local_part = email.split('@')[0]
     parts = local_part.split('.')
     if len(parts) >= 2:
@@ -249,8 +258,231 @@ def get_company_color(azienda):
         "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
+def is_admin_user(email):
+    """Verifica se l'utente è admin"""
+    admin_emails = [
+        'admin@auxiell.com',
+        'admin@euxilia.com', 
+        'admin@xva-services.com'
+    ]
+    return email.lower() in admin_emails
 
+def extract_name_from_admin_email(email):
+    """Estrae nome per admin"""
+    if email.startswith('admin@'):
+        return "Admin", "Sistema"
+    return extract_name_from_email(email)
 # Routes
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    """Dashboard amministrativa"""
+    user_email = session.get('user_email')
+    
+    if not is_admin_user(user_email):
+        return render_template('error.html', error='Accesso negato. Solo per amministratori.')
+    
+    try:
+        # Statistiche generali
+        data = load_progress_data()
+        
+        total_users = len(data.get('users', {}))
+        total_tests = len(data.get('test_results', []))
+        
+        # Statistiche per azienda
+        stats_per_azienda = {}
+        for email, user_data in data.get('users', {}).items():
+            azienda = user_data.get('azienda', 'Unknown')
+            if azienda not in stats_per_azienda:
+                stats_per_azienda[azienda] = {'users': 0, 'tests': 0}
+            stats_per_azienda[azienda]['users'] += 1
+        
+        for result in data.get('test_results', []):
+            azienda = result.get('azienda', 'Unknown')
+            if azienda in stats_per_azienda:
+                stats_per_azienda[azienda]['tests'] += 1
+        
+        # Test recenti (ultimi 10)
+        recent_tests = sorted(
+            data.get('test_results', []), 
+            key=lambda x: x.get('completed_at', ''), 
+            reverse=True
+        )[:10]
+        
+        # Aggiungi nome utente ai test recenti
+        for test in recent_tests:
+            email = test.get('user_email', '')
+            if email:
+                nome, cognome = extract_name_from_email(email)
+                test['user_name'] = f"{nome} {cognome}"
+            else:
+                test['user_name'] = 'Unknown'
+        
+        logo_path, logo_exists = get_logo_info(session.get('azienda_scelta'))
+        company_color = get_company_color(session.get('azienda_scelta'))
+        
+        return render_template('admin_dashboard.html',
+                             total_users=total_users,
+                             total_tests=total_tests,
+                             stats_per_azienda=stats_per_azienda,
+                             recent_tests=recent_tests,
+                             utente=session.get('utente'),
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+        
+    except Exception as e:
+        return render_template('error.html', error=f'Errore nel caricamento dashboard admin: {e}')
+@app.route('/admin/download_report')
+@login_required
+def admin_download_report():
+    """Scarica report completo di tutti i test"""
+    user_email = session.get('user_email')
+    
+    if not is_admin_user(user_email):
+        return "Accesso negato. Solo per amministratori.", 403
+    
+    try:
+        print("=== ADMIN DOWNLOAD REPORT ===")
+        
+        # Carica tutti i dati
+        data = load_progress_data()
+        test_results = data.get('test_results', [])
+        users_data = data.get('users', {})
+        
+        if not test_results:
+            return "Nessun test completato trovato.", 404
+        
+        print(f"Trovati {len(test_results)} test completati")
+        
+        # Prepara dati per Excel
+        report_data = []
+        
+        for result in test_results:
+            email = result.get('user_email', '')
+            
+            # Estrai nome e cognome dall'email
+            if email:
+                nome, cognome = extract_name_from_email(email)
+                nome_completo = f"{nome} {cognome}"
+            else:
+                nome_completo = "Unknown"
+            
+            # Formatta data
+            completed_at = result.get('completed_at', '')
+            if completed_at:
+                try:
+                    # Converti ISO format a data leggibile
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                    data_formattata = dt.strftime('%d/%m/%Y %H:%M')
+                except:
+                    data_formattata = completed_at
+            else:
+                data_formattata = "N/A"
+            
+            report_data.append({
+                'Nome Utente': nome_completo,
+                'Email': email,
+                'Azienda': result.get('azienda', 'N/A'),
+                'Test Svolto': result.get('test_name', 'N/A'),
+                'Data Completamento': data_formattata,
+                'Punteggio (%)': result.get('score', 0),
+                'Risposte Corrette': result.get('correct_answers', 0),
+                'Totale Domande': result.get('total_questions', 0),
+                'Punteggio Dettagliato': f"{result.get('correct_answers', 0)}/{result.get('total_questions', 0)}"
+            })
+        
+        # Ordina per data (più recenti prima)
+        report_data.sort(key=lambda x: x['Data Completamento'], reverse=True)
+        
+        print(f"Preparati {len(report_data)} record per il report")
+        
+        # Crea DataFrame
+        df_report = pd.DataFrame(report_data)
+        
+        # Statistiche riassuntive
+        total_tests = len(df_report)
+        avg_score = df_report['Punteggio (%)'].mean() if total_tests > 0 else 0
+        
+        # Raggruppa per azienda
+        stats_aziende = df_report.groupby('Azienda').agg({
+            'Nome Utente': 'nunique',
+            'Test Svolto': 'count',
+            'Punteggio (%)': 'mean'
+        }).round(1)
+        stats_aziende.columns = ['Utenti Unici', 'Test Totali', 'Punteggio Medio (%)']
+        
+        # Raggruppa per test
+        stats_test = df_report.groupby('Test Svolto').agg({
+            'Nome Utente': 'count',
+            'Punteggio (%)': 'mean'
+        }).round(1)
+        stats_test.columns = ['Volte Svolto', 'Punteggio Medio (%)']
+        
+        # Info generale
+        data_report = datetime.now().strftime("%d/%m/%Y %H:%M")
+        admin_name = session.get('utente', 'Admin')
+        
+        info_generale = pd.DataFrame([{
+            'Report Generato Da': admin_name,
+            'Data Generazione': data_report,
+            'Totale Test': total_tests,
+            'Punteggio Medio Generale (%)': round(avg_score, 1),
+            'Periodo': 'Tutti i test disponibili',
+            'Utenti Totali': df_report['Nome Utente'].nunique()
+        }])
+        
+        # Crea file Excel
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Sheet info generale
+            info_generale.to_excel(writer, index=False, sheet_name="Info Report", startrow=0)
+            
+            # Sheet report principale
+            df_report.to_excel(writer, index=False, sheet_name="Report Completo", startrow=0)
+            
+            # Sheet statistiche per azienda
+            stats_aziende.to_excel(writer, index=True, sheet_name="Statistiche Aziende", startrow=0)
+            
+            # Sheet statistiche per test
+            stats_test.to_excel(writer, index=True, sheet_name="Statistiche Test", startrow=0)
+        
+        # Proteggi il foglio info
+        buf.seek(0)
+        wb = load_workbook(buf)
+        
+        if "Info Report" in wb.sheetnames:
+            ws = wb["Info Report"]
+            ws.protection.sheet = True
+            ws.protection.password = "admin2025"
+            ws.protection.enable()
+        
+        buf_protetto = BytesIO()
+        wb.save(buf_protetto)
+        buf_protetto.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"report_completo_test_{timestamp}.xlsx"
+        
+        print(f"Report generato: {filename}")
+        print("=== ADMIN DOWNLOAD SUCCESS ===")
+        
+        return send_file(
+            buf_protetto,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        print(f"=== ADMIN DOWNLOAD ERROR ===")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Errore durante la generazione del report: {e}", 500
+
 @app.route('/health')
 def health_check():
     try:
@@ -290,18 +522,20 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+# Aggiorna la route login per gestire admin:
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
         
         if not validate_email(email):
-            return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com')
+            return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com o admin@azienda.com')
         
         try:
             azienda = extract_company_from_email(email)
             nome, cognome = extract_name_from_email(email)
             
+            # Carica o crea utente
             user_data = get_user_data(email)
             
             if not user_data:
@@ -310,11 +544,15 @@ def login():
                     'nome': nome,
                     'cognome': cognome,
                     'azienda': azienda,
+                    'is_admin': is_admin_user(email),
                     'created_at': datetime.now().isoformat(),
                     'last_login': datetime.now().isoformat()
                 }
+                print(f"✓ Nuovo utente: {email} (Admin: {is_admin_user(email)})")
             else:
                 user_data['last_login'] = datetime.now().isoformat()
+                user_data['is_admin'] = is_admin_user(email)
+                print(f"✓ Login utente esistente: {email} (Admin: {is_admin_user(email)})")
             
             save_user_data(email, user_data)
             
@@ -322,12 +560,17 @@ def login():
             session['user_email'] = email
             session['utente'] = f"{nome} {cognome}"
             session['azienda_scelta'] = azienda
+            session['is_admin'] = is_admin_user(email)
             session.permanent = True
             
-            return redirect(url_for('dashboard'))
+            # Redirect diverso per admin
+            if is_admin_user(email):
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('dashboard'))
             
         except Exception as e:
-            print(f"Login error: {e}")
+            print(f"Errore login: {e}")
             return render_template('login.html', error='Errore durante il login. Riprova.')
     
     return render_template('login.html')
