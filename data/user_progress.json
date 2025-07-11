@@ -8,8 +8,17 @@
       "is_admin": false,
       "created_at": "2025-07-11T13:18:10.132914",
       "last_login": "2025-07-11T13:18:10.132929"
+    },
+    "admin@auxiell.com": {
+      "email": "admin@auxiell.com",
+      "nome": "Admin",
+      "cognome": "Sistema",
+      "azienda": "auxiell",
+      "is_admin": true,
+      "created_at": "2025-07-11T13:18:25.840683",
+      "last_login": "2025-07-11T13:18:25.840693"
     }
   },
   "test_results": [],
-  "last_updated": "2025-07-11T13:18:10.133020"
+  "last_updated": "2025-07-11T13:18:25.840814"
 }
