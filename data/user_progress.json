@@ -7,7 +7,7 @@
       "azienda": "auxiell",
       "is_admin": false,
       "created_at": "2025-07-11T13:18:10.132914",
-      "last_login": "2025-07-11T13:47:40.600122"
+      "last_login": "2025-07-11T13:51:22.718956"
     },
     "admin@auxiell.com": {
       "email": "admin@auxiell.com",
@@ -32,5 +32,5 @@
       "completed_at": "2025-07-11T13:48:38.713514"
     }
   ],
-  "last_updated": "2025-07-11T13:48:38.713531"
+  "last_updated": "2025-07-11T13:51:22.719222"
 }
