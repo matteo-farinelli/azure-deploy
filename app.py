@@ -280,10 +280,12 @@ def extract_name_from_admin_email(email):
         return "Admin", "Sistema"
     return extract_name_from_email(email)
 # Routes
+# Sostituisci la route admin_dashboard nel tuo app.py con questa versione aggiornata:
+
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    """Dashboard amministrativa semplificata"""
+    """Dashboard amministrativa con statistiche complete"""
     user_email = session.get('user_email')
     
     if not is_admin_user(user_email):
@@ -300,31 +302,67 @@ def admin_dashboard():
         
         print(f"Total users: {total_users}, Total tests: {total_tests}")
         
-        # Statistiche per azienda - versione semplificata
+        # Calcola punteggio medio generale e tasso di successo
+        test_results = data.get('test_results', [])
+        if test_results:
+            scores = [result.get('score', 0) for result in test_results if result.get('score') is not None]
+            if scores:
+                average_score = sum(scores) / len(scores)
+                success_rate = (len([s for s in scores if s >= 60]) / len(scores)) * 100
+            else:
+                average_score = 0
+                success_rate = 0
+        else:
+            average_score = 0
+            success_rate = 0
+        
+        print(f"Average score: {average_score:.1f}%, Success rate: {success_rate:.1f}%")
+        
+        # Statistiche per azienda - versione completa
         stats_per_azienda = {}
         
         # Conta utenti per azienda
         for email, user_data in data.get('users', {}).items():
             azienda = user_data.get('azienda', 'Unknown')
             if azienda not in stats_per_azienda:
-                stats_per_azienda[azienda] = {'users': 0, 'tests': 0}
+                stats_per_azienda[azienda] = {
+                    'users': 0, 
+                    'tests': 0, 
+                    'scores': []
+                }
             stats_per_azienda[azienda]['users'] += 1
         
-        # Conta test per azienda
+        # Conta test e punteggi per azienda
         for result in data.get('test_results', []):
             azienda = result.get('azienda', 'Unknown')
+            score = result.get('score')
+            
             if azienda in stats_per_azienda:
                 stats_per_azienda[azienda]['tests'] += 1
+                if score is not None:
+                    stats_per_azienda[azienda]['scores'].append(score)
             else:
-                stats_per_azienda[azienda] = {'users': 0, 'tests': 1}
+                stats_per_azienda[azienda] = {
+                    'users': 0, 
+                    'tests': 1, 
+                    'scores': [score] if score is not None else []
+                }
+        
+        # Calcola medie per azienda
+        for azienda in stats_per_azienda:
+            scores = stats_per_azienda[azienda]['scores']
+            if scores:
+                stats_per_azienda[azienda]['average_score'] = sum(scores) / len(scores)
+                stats_per_azienda[azienda]['success_rate'] = (len([s for s in scores if s >= 60]) / len(scores)) * 100
+            else:
+                stats_per_azienda[azienda]['average_score'] = 0
+                stats_per_azienda[azienda]['success_rate'] = 0
         
         print(f"Stats per azienda: {stats_per_azienda}")
         
         # Test recenti - versione semplificata
         recent_tests = []
-        test_results = data.get('test_results', [])
         
-        # Ordina per data
         try:
             sorted_tests = sorted(
                 test_results, 
@@ -352,6 +390,8 @@ def admin_dashboard():
         template_data = {
             'total_users': total_users,
             'total_tests': total_tests,
+            'average_score': average_score,
+            'success_rate': success_rate,
             'stats_per_azienda': stats_per_azienda,
             'recent_tests': recent_tests,
             'utente': session.get('utente', 'Admin'),
@@ -369,7 +409,6 @@ def admin_dashboard():
         import traceback
         traceback.print_exc()
         return render_template('error.html', error=f'Errore dashboard admin: {str(e)}')
-
 @app.route('/admin/download_report')
 @login_required
 def admin_download_report():
