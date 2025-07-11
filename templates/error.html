@@ -1,19 +1,171 @@
+<!-- templates/error.html - Versione Aggiornata per Test Una Sola Volta -->
 {% extends "base.html" %}
+
+{% block title %}Errore - Assessment App{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-8 col-lg-6">
             <div class="dashboard-card text-center">
-                <i class="fas fa-exclamation-triangle fa-4x text-danger mb-4"></i>
-                <h2 class="mb-3">Errore</h2>
-                <p class="text-muted mb-4">{{ error }}</p>
-                <a href="{{ url_for('dashboard') if session.logged_in else url_for('login') }}" class="btn btn-primary">
-                    <i class="fas fa-home me-2"></i>
-                    {% if session.logged_in %}Dashboard{% else %}Login{% endif %}
-                </a>
+                <!-- Icona errore dinamica -->
+                {% if 'già completato' in error or 'una sola volta' in error %}
+                    <i class="fas fa-lock fa-4x text-warning mb-4"></i>
+                {% elif 'accesso negato' in error.lower() or 'amministratori' in error.lower() %}
+                    <i class="fas fa-shield-alt fa-4x text-danger mb-4"></i>
+                {% else %}
+                    <i class="fas fa-exclamation-triangle fa-4x text-danger mb-4"></i>
+                {% endif %}
+                
+                <!-- Titolo dinamico -->
+                <h2 class="mb-3">
+                    {% if 'già completato' in error or 'una sola volta' in error %}
+                        Test Non Disponibile
+                    {% elif 'accesso negato' in error.lower() %}
+                        Accesso Negato
+                    {% else %}
+                        Errore
+                    {% endif %}
+                </h2>
+                
+                <!-- Messaggio errore con formattazione migliorata -->
+                <div class="alert {% if 'già completato' in error or 'una sola volta' in error %}alert-warning{% elif 'accesso negato' in error.lower() %}alert-danger{% else %}alert-info{% endif %} mb-4">
+                    <p class="mb-0">{{ error }}</p>
+                </div>
+                
+                <!-- Messaggio aggiuntivo per test già completati -->
+                {% if 'già completato' in error or 'una sola volta' in error %}
+                    <div class="mb-4">
+                        <h5 class="text-muted mb-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Cosa puoi fare:
+                        </h5>
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-download text-primary me-2 mt-1"></i>
+                                    <small>Scarica i risultati del test già completato</small>
+                                </div>
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-list-alt text-success me-2 mt-1"></i>
+                                    <small>Controlla altri test disponibili</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-chart-line text-info me-2 mt-1"></i>
+                                    <small>Visualizza le tue statistiche</small>
+                                </div>
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-question-circle text-muted me-2 mt-1"></i>
+                                    <small>Contatta l'amministratore per domande</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <!-- Pulsanti di navigazione -->
+                <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+                    {% if show_dashboard_button or session.get('logged_in') %}
+                        <!-- Pulsante Dashboard principale -->
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-tachometer-alt me-2"></i>
+                            Torna alla Dashboard
+                        </a>
+                        
+                        <!-- Pulsante admin se è admin -->
+                        {% if session.get('is_admin') %}
+                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                Dashboard Admin
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <!-- Se non loggato, vai al login -->
+                        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-sign-in-alt me-2"></i>
+                            Vai al Login
+                        </a>
+                    {% endif %}
+                </div>
+                
+                <!-- Link aggiuntivi per test già completati -->
+                {% if ('già completato' in error or 'una sola volta' in error) and session.get('logged_in') %}
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="text-muted mb-3">Azioni Rapide:</h6>
+                        <div class="d-flex flex-wrap gap-2 justify-content-center">
+                            <a href="{{ url_for('download_latest') }}" class="btn btn-outline-success btn-sm">
+                                <i class="fas fa-download me-1"></i>Scarica Ultimo Test
+                            </a>
+                            {% if session.get('is_admin') %}
+                                <a href="{{ url_for('admin_download_report') }}" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-file-excel me-1"></i>Report Completo
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <!-- Informazioni di debug (solo se necessario) -->
+                {% if session.get('is_admin') %}
+                    <div class="mt-4 pt-3 border-top">
+                        <details class="text-start">
+                            <summary class="text-muted small">
+                                <i class="fas fa-cog me-1"></i>Info Debug (Admin)
+                            </summary>
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <small class="text-muted">
+                                    <strong>Utente:</strong> {{ session.get('user_email', 'N/A') }}<br>
+                                    <strong>Azienda:</strong> {{ session.get('azienda_scelta', 'N/A') }}<br>
+                                    <strong>Admin:</strong> {{ session.get('is_admin', False) }}<br>
+                                    <strong>Timestamp:</strong> {{ moment().format('DD/MM/YYYY HH:mm:ss') if moment else 'N/A' }}
+                                </small>
+                            </div>
+                        </details>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<!-- Script per migliorare l'esperienza utente -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-focus sul pulsante principale dopo 1 secondo
+    setTimeout(function() {
+        const primaryBtn = document.querySelector('.btn-primary');
+        if (primaryBtn) {
+            primaryBtn.focus();
+        }
+    }, 1000);
+    
+    // Gestione tasto Esc per tornare indietro
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const dashboardBtn = document.querySelector('.btn-primary');
+            if (dashboardBtn) {
+                dashboardBtn.click();
+            }
+        }
+    });
+    
+    // Mostra un messaggio personalizzato per test già completati
+    const errorText = document.querySelector('.alert').textContent;
+    if (errorText.includes('già completato') || errorText.includes('una sola volta')) {
+        // Dopo 3 secondi, suggerisci azioni alternative
+        setTimeout(function() {
+            const actionHint = document.createElement('div');
+            actionHint.className = 'mt-3 text-muted small';
+            actionHint.innerHTML = '<i class="fas fa-lightbulb me-1"></i>Suggerimento: Premi ESC per tornare velocemente alla dashboard';
+            
+            const alertBox = document.querySelector('.alert');
+            if (alertBox && !document.querySelector('.mt-3.text-muted.small')) {
+                alertBox.after(actionHint);
+            }
+        }, 3000);
+    }
+});
+</script>
 {% endblock %}
