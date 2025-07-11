@@ -115,7 +115,14 @@ def load_progress_data():
         "test_results": [],
         "last_updated": datetime.now().isoformat()
     }
-
+def is_admin_user(email):
+    """Verifica se l'utente è admin"""
+    admin_emails = [
+        'admin@auxiell.com',
+        'admin@euxilia.com', 
+        'admin@xva-services.com'
+    ]
+    return email.lower() in admin_emails
 def save_progress_data(data):
     """Salva progressi con gestione errori"""
     try:
@@ -231,7 +238,7 @@ def extract_name_from_email(email):
         cognome = parts[1].title()
         return nome, cognome
     return "User", "Unknown"
-
+    
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -276,62 +283,93 @@ def extract_name_from_admin_email(email):
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    """Dashboard amministrativa"""
+    """Dashboard amministrativa semplificata"""
     user_email = session.get('user_email')
     
     if not is_admin_user(user_email):
         return render_template('error.html', error='Accesso negato. Solo per amministratori.')
     
     try:
-        # Statistiche generali
+        print("=== LOADING ADMIN DASHBOARD ===")
+        
+        # Carica dati base
         data = load_progress_data()
         
         total_users = len(data.get('users', {}))
         total_tests = len(data.get('test_results', []))
         
-        # Statistiche per azienda
+        print(f"Total users: {total_users}, Total tests: {total_tests}")
+        
+        # Statistiche per azienda - versione semplificata
         stats_per_azienda = {}
+        
+        # Conta utenti per azienda
         for email, user_data in data.get('users', {}).items():
             azienda = user_data.get('azienda', 'Unknown')
             if azienda not in stats_per_azienda:
                 stats_per_azienda[azienda] = {'users': 0, 'tests': 0}
             stats_per_azienda[azienda]['users'] += 1
         
+        # Conta test per azienda
         for result in data.get('test_results', []):
             azienda = result.get('azienda', 'Unknown')
             if azienda in stats_per_azienda:
                 stats_per_azienda[azienda]['tests'] += 1
-        
-        # Test recenti (ultimi 10)
-        recent_tests = sorted(
-            data.get('test_results', []), 
-            key=lambda x: x.get('completed_at', ''), 
-            reverse=True
-        )[:10]
-        
-        # Aggiungi nome utente ai test recenti
-        for test in recent_tests:
-            email = test.get('user_email', '')
-            if email:
-                nome, cognome = extract_name_from_email(email)
-                test['user_name'] = f"{nome} {cognome}"
             else:
-                test['user_name'] = 'Unknown'
+                stats_per_azienda[azienda] = {'users': 0, 'tests': 1}
         
-        logo_path, logo_exists = get_logo_info(session.get('azienda_scelta'))
-        company_color = get_company_color(session.get('azienda_scelta'))
+        print(f"Stats per azienda: {stats_per_azienda}")
         
-        return render_template('admin_dashboard.html',
-                             total_users=total_users,
-                             total_tests=total_tests,
-                             stats_per_azienda=stats_per_azienda,
-                             recent_tests=recent_tests,
-                             utente=session.get('utente'),
-                             logo_path=logo_path if logo_exists else None,
-                             company_color=company_color)
+        # Test recenti - versione semplificata
+        recent_tests = []
+        test_results = data.get('test_results', [])
+        
+        # Ordina per data
+        try:
+            sorted_tests = sorted(
+                test_results, 
+                key=lambda x: x.get('completed_at', ''), 
+                reverse=True
+            )
+            
+            # Prendi solo i primi 10
+            for test in sorted_tests[:10]:
+                email = test.get('user_email', '')
+                if email:
+                    nome, cognome = extract_name_from_email(email)
+                    test['user_name'] = f"{nome} {cognome}"
+                else:
+                    test['user_name'] = 'Unknown'
+                recent_tests.append(test)
+                
+        except Exception as e:
+            print(f"Errore processing recent tests: {e}")
+            recent_tests = []
+        
+        print(f"Recent tests: {len(recent_tests)}")
+        
+        # Dati per template
+        template_data = {
+            'total_users': total_users,
+            'total_tests': total_tests,
+            'stats_per_azienda': stats_per_azienda,
+            'recent_tests': recent_tests,
+            'utente': session.get('utente', 'Admin'),
+            'azienda_scelta': session.get('azienda_scelta', 'auxiell'),
+            'company_color': get_company_color(session.get('azienda_scelta', 'auxiell'))
+        }
+        
+        print("=== RENDERING ADMIN TEMPLATE ===")
+        
+        return render_template('admin_dashboard.html', **template_data)
         
     except Exception as e:
-        return render_template('error.html', error=f'Errore nel caricamento dashboard admin: {e}')
+        print(f"=== ADMIN DASHBOARD ERROR ===")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('error.html', error=f'Errore dashboard admin: {str(e)}')
+
 @app.route('/admin/download_report')
 @login_required
 def admin_download_report():
@@ -347,7 +385,6 @@ def admin_download_report():
         # Carica tutti i dati
         data = load_progress_data()
         test_results = data.get('test_results', [])
-        users_data = data.get('users', {})
         
         if not test_results:
             return "Nessun test completato trovato.", 404
@@ -371,8 +408,6 @@ def admin_download_report():
             completed_at = result.get('completed_at', '')
             if completed_at:
                 try:
-                    # Converti ISO format a data leggibile
-                    from datetime import datetime
                     dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
                     data_formattata = dt.strftime('%d/%m/%Y %H:%M')
                 except:
@@ -388,36 +423,14 @@ def admin_download_report():
                 'Data Completamento': data_formattata,
                 'Punteggio (%)': result.get('score', 0),
                 'Risposte Corrette': result.get('correct_answers', 0),
-                'Totale Domande': result.get('total_questions', 0),
-                'Punteggio Dettagliato': f"{result.get('correct_answers', 0)}/{result.get('total_questions', 0)}"
+                'Totale Domande': result.get('total_questions', 0)
             })
         
-        # Ordina per data (più recenti prima)
+        # Ordina per data
         report_data.sort(key=lambda x: x['Data Completamento'], reverse=True)
-        
-        print(f"Preparati {len(report_data)} record per il report")
         
         # Crea DataFrame
         df_report = pd.DataFrame(report_data)
-        
-        # Statistiche riassuntive
-        total_tests = len(df_report)
-        avg_score = df_report['Punteggio (%)'].mean() if total_tests > 0 else 0
-        
-        # Raggruppa per azienda
-        stats_aziende = df_report.groupby('Azienda').agg({
-            'Nome Utente': 'nunique',
-            'Test Svolto': 'count',
-            'Punteggio (%)': 'mean'
-        }).round(1)
-        stats_aziende.columns = ['Utenti Unici', 'Test Totali', 'Punteggio Medio (%)']
-        
-        # Raggruppa per test
-        stats_test = df_report.groupby('Test Svolto').agg({
-            'Nome Utente': 'count',
-            'Punteggio (%)': 'mean'
-        }).round(1)
-        stats_test.columns = ['Volte Svolto', 'Punteggio Medio (%)']
         
         # Info generale
         data_report = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -426,9 +439,7 @@ def admin_download_report():
         info_generale = pd.DataFrame([{
             'Report Generato Da': admin_name,
             'Data Generazione': data_report,
-            'Totale Test': total_tests,
-            'Punteggio Medio Generale (%)': round(avg_score, 1),
-            'Periodo': 'Tutti i test disponibili',
+            'Totale Test': len(df_report),
             'Utenti Totali': df_report['Nome Utente'].nunique()
         }])
         
@@ -436,41 +447,19 @@ def admin_download_report():
         buf = BytesIO()
         
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            # Sheet info generale
             info_generale.to_excel(writer, index=False, sheet_name="Info Report", startrow=0)
-            
-            # Sheet report principale
             df_report.to_excel(writer, index=False, sheet_name="Report Completo", startrow=0)
-            
-            # Sheet statistiche per azienda
-            stats_aziende.to_excel(writer, index=True, sheet_name="Statistiche Aziende", startrow=0)
-            
-            # Sheet statistiche per test
-            stats_test.to_excel(writer, index=True, sheet_name="Statistiche Test", startrow=0)
         
-        # Proteggi il foglio info
         buf.seek(0)
-        wb = load_workbook(buf)
-        
-        if "Info Report" in wb.sheetnames:
-            ws = wb["Info Report"]
-            ws.protection.sheet = True
-            ws.protection.password = "admin2025"
-            ws.protection.enable()
-        
-        buf_protetto = BytesIO()
-        wb.save(buf_protetto)
-        buf_protetto.seek(0)
         
         # Nome file
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"report_completo_test_{timestamp}.xlsx"
         
         print(f"Report generato: {filename}")
-        print("=== ADMIN DOWNLOAD SUCCESS ===")
         
         return send_file(
-            buf_protetto,
+            buf,
             as_attachment=True,
             download_name=filename,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -479,8 +468,6 @@ def admin_download_report():
     except Exception as e:
         print(f"=== ADMIN DOWNLOAD ERROR ===")
         print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
         return f"Errore durante la generazione del report: {e}", 500
 
 @app.route('/health')
