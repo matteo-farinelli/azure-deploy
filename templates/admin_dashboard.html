@@ -23,7 +23,7 @@
     <div class="alert alert-info mb-4">
         <i class="fas fa-info-circle me-2"></i>
         <strong>Modalità Amministratore</strong> - Hai accesso a tutti i dati e statistiche del sistema.
-        <small class="d-block mt-1">Ultimo aggiornamento: {{ moment().format('DD/MM/YYYY HH:mm') if moment else 'N/A' }}</small>
+        <small class="d-block mt-1">Modalità Amministratore Attiva</small>
     </div>
     
     <!-- Statistiche Generali -->
@@ -80,6 +80,45 @@
         </div>
     </div>
     
+    <!-- Riga aggiuntiva per punteggio medio -->
+    <div class="row mb-4">
+        <div class="col-md-3 offset-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Punteggio Medio</h5>
+                        <div class="stats-number">
+                            {% if average_score is defined %}
+                                {{ average_score|round(1) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="fas fa-trophy fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Tasso Successo</h5>
+                        <div class="stats-number">
+                            {% if success_rate is defined %}
+                                {{ success_rate|round(1) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">≥ 60%</small>
+                    </div>
+                    <i class="fas fa-medal fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="row">
         <!-- Statistiche per Azienda -->
         <div class="col-md-6">
@@ -98,6 +137,8 @@
                                     <th class="text-center">Utenti</th>
                                     <th class="text-center">Test</th>
                                     <th class="text-center">Test/Utente</th>
+                                    <th class="text-center">Punteggio Medio</th>
+                                    <th class="text-center">Tasso Successo</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -125,6 +166,34 @@
                                             {{ (stats.tests / stats.users)|round(1) }}
                                         {% else %}
                                             0
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if stats.average_score is defined %}
+                                            {% set avg_score = stats.average_score %}
+                                            {% if avg_score >= 80 %}
+                                                <span class="badge bg-success">{{ avg_score|round(1) }}%</span>
+                                            {% elif avg_score >= 60 %}
+                                                <span class="badge bg-warning">{{ avg_score|round(1) }}%</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">{{ avg_score|round(1) }}%</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if stats.success_rate is defined %}
+                                            {% set success = stats.success_rate %}
+                                            {% if success >= 80 %}
+                                                <span class="badge bg-success">{{ success|round(1) }}%</span>
+                                            {% elif success >= 60 %}
+                                                <span class="badge bg-warning">{{ success|round(1) }}%</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">{{ success|round(1) }}%</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
                                         {% endif %}
                                     </td>
                                 </tr>
