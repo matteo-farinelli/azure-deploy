@@ -1,10 +1,11 @@
-<!-- templates/admin_dashboard.html - Versione corretta -->
+<!-- templates/admin_dashboard.html - Versione Migliorata -->
 {% extends "base.html" %}
 
 {% block title %}Dashboard Admin - Assessment App{% endblock %}
 
 {% block content %}
 <div class="container">
+    <!-- Header Section -->
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -22,6 +23,7 @@
     <div class="alert alert-info mb-4">
         <i class="fas fa-info-circle me-2"></i>
         <strong>Modalità Amministratore</strong> - Hai accesso a tutti i dati e statistiche del sistema.
+        <small class="d-block mt-1">Ultimo aggiornamento: {{ moment().format('DD/MM/YYYY HH:mm') if moment else 'N/A' }}</small>
     </div>
     
     <!-- Statistiche Generali -->
@@ -31,7 +33,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Utenti Totali</h5>
-                        <div class="stats-number">{{ total_users }}</div>
+                        <div class="stats-number">{{ total_users|default(0) }}</div>
                     </div>
                     <i class="fas fa-users fa-3x opacity-50"></i>
                 </div>
@@ -42,7 +44,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Test Completati</h5>
-                        <div class="stats-number">{{ total_tests }}</div>
+                        <div class="stats-number">{{ total_tests|default(0) }}</div>
                     </div>
                     <i class="fas fa-clipboard-check fa-3x opacity-50"></i>
                 </div>
@@ -53,7 +55,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Aziende Attive</h5>
-                        <div class="stats-number">{{ stats_per_azienda|length }}</div>
+                        <div class="stats-number">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</div>
                     </div>
                     <i class="fas fa-building fa-3x opacity-50"></i>
                 </div>
@@ -65,7 +67,7 @@
                     <div>
                         <h5>Media Test/Utente</h5>
                         <div class="stats-number">
-                            {% if total_users > 0 %}
+                            {% if total_users and total_users > 0 %}
                                 {{ (total_tests / total_users)|round(1) }}
                             {% else %}
                                 0
@@ -113,13 +115,13 @@
                                         {% endif %}
                                         
                                         <span class="badge" style="background-color: {{ badge_color }}">
-                                            {{ azienda|title }}
+                                            {{ azienda|title if azienda else 'N/A' }}
                                         </span>
                                     </td>
-                                    <td class="text-center">{{ stats.users }}</td>
-                                    <td class="text-center">{{ stats.tests }}</td>
+                                    <td class="text-center">{{ stats.users|default(0) }}</td>
+                                    <td class="text-center">{{ stats.tests|default(0) }}</td>
                                     <td class="text-center">
-                                        {% if stats.users > 0 %}
+                                        {% if stats.users and stats.users > 0 %}
                                             {{ (stats.tests / stats.users)|round(1) }}
                                         {% else %}
                                             0
@@ -153,32 +155,41 @@
                             <div class="list-group-item">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
-                                        <h6 class="mb-1">{{ test.user_name }}</h6>
-                                        <p class="mb-1 small">{{ test.test_name }}</p>
+                                        <h6 class="mb-1">{{ test.user_name|default('N/A') }}</h6>
+                                        <p class="mb-1 small">{{ test.test_name|default('Test Sconosciuto') }}</p>
                                         <small class="text-muted">
                                             <i class="fas fa-calendar me-1"></i>
-                                            {{ test.completed_at.split('T')[0] }}
+                                            {% if test.completed_at %}
+                                                {% if 'T' in test.completed_at %}
+                                                    {{ test.completed_at.split('T')[0] }}
+                                                {% else %}
+                                                    {{ test.completed_at }}
+                                                {% endif %}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
                                             <span class="ms-2">
                                                 <i class="fas fa-building me-1"></i>
-                                                {{ test.azienda|title }}
+                                                {{ test.azienda|title if test.azienda else 'N/A' }}
                                             </span>
                                         </small>
                                     </div>
                                     <div class="text-end">
-                                        {% if test.score >= 80 %}
+                                        {% set score = test.score|default(0) %}
+                                        {% if score >= 80 %}
                                             {% set badge_class = 'success' %}
-                                        {% elif test.score >= 60 %}
+                                        {% elif score >= 60 %}
                                             {% set badge_class = 'warning' %}
                                         {% else %}
                                             {% set badge_class = 'danger' %}
                                         {% endif %}
                                         
                                         <span class="badge bg-{{ badge_class }} fs-6">
-                                            {{ test.score }}%
+                                            {{ score }}%
                                         </span>
                                         <br>
                                         <small class="text-muted">
-                                            {{ test.correct_answers }}/{{ test.total_questions }}
+                                            {{ test.correct_answers|default(0) }}/{{ test.total_questions|default(0) }}
                                         </small>
                                     </div>
                                 </div>
@@ -188,7 +199,7 @@
                     
                     <div class="text-center mt-3">
                         <small class="text-muted">
-                            Mostrando gli ultimi 10 test completati
+                            Mostrando gli ultimi {{ recent_tests|length }} test completati
                         </small>
                     </div>
                 {% else %}
@@ -253,34 +264,99 @@
             </div>
         </div>
     </div>
+    
+    <!-- Alert Container per notifiche dinamiche -->
+    <div id="alertContainer" class="position-fixed" style="top: 20px; right: 20px; z-index: 9999;"></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Funzione migliorata per la sincronizzazione
 async function syncData() {
-    const btn = event.target;
-    const originalText = btn.innerHTML;
+    const btn = document.querySelector('button[onclick="syncData()"]');
+    if (!btn) return;
     
+    const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizzando...';
     btn.disabled = true;
     
     try {
-        const response = await fetch('/sync');
+        const response = await fetch('/sync', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
         if (data.success) {
-            alert('Sincronizzazione completata!\nUtenti: ' + data.users_count + '\nRisultati: ' + data.results_count);
-            location.reload();
+            showAlert(`
+                <strong>Sincronizzazione completata!</strong><br>
+                <small>Utenti: ${data.users_count || 0} | Risultati: ${data.results_count || 0}</small>
+            `, 'success');
+            
+            // Ricarica la pagina dopo 2 secondi
+            setTimeout(() => location.reload(), 2000);
         } else {
-            alert('Errore durante la sincronizzazione: ' + data.error);
+            showAlert(`<strong>Errore durante la sincronizzazione:</strong><br>${data.error || 'Errore sconosciuto'}`, 'danger');
         }
     } catch (error) {
-        alert('Errore di connessione: ' + error.message);
+        console.error('Sync error:', error);
+        showAlert(`<strong>Errore di connessione:</strong><br>${error.message}`, 'danger');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
+
+// Funzione per mostrare alert dinamici
+function showAlert(message, type = 'info') {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertId = 'alert-' + Date.now();
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.id = alertId;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show mb-2`;
+    alertDiv.style.cssText = 'min-width: 350px; max-width: 500px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="removeAlert('${alertId}')"></button>
+    `;
+    
+    alertContainer.appendChild(alertDiv);
+    
+    // Auto-remove dopo 5 secondi
+    setTimeout(() => removeAlert(alertId), 5000);
+}
+
+// Funzione per rimuovere alert
+function removeAlert(alertId) {
+    const alert = document.getElementById(alertId);
+    if (alert) {
+        alert.classList.remove('show');
+        setTimeout(() => alert.remove(), 150);
+    }
+}
+
+// Test della connettività all'avvio
+document.addEventListener('DOMContentLoaded', function() {
+    // Check health status
+    fetch('/health')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status !== 'healthy') {
+                showAlert('<strong>Attenzione:</strong> Alcuni servizi potrebbero non funzionare correttamente.', 'warning');
+            }
+        })
+        .catch(error => {
+            console.warn('Health check failed:', error);
+        });
+});
 </script>
-{% endblock %>
+{% endblock %}
