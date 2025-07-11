@@ -1,4 +1,4 @@
-<!-- templates/admin_dashboard.html -->
+<!-- templates/admin_dashboard.html - Versione corretta -->
 {% extends "base.html" %}
 
 {% block title %}Dashboard Admin - Assessment App{% endblock %}
@@ -66,7 +66,7 @@
                         <h5>Media Test/Utente</h5>
                         <div class="stats-number">
                             {% if total_users > 0 %}
-                                {{ "%.1f"|format(total_tests / total_users) }}
+                                {{ (total_tests / total_users)|round(1) }}
                             {% else %}
                                 0
                             {% endif %}
@@ -102,11 +102,17 @@
                                 {% for azienda, stats in stats_per_azienda.items() %}
                                 <tr>
                                     <td>
-                                        <span class="badge" style="background-color: 
-                                            {% if azienda == 'auxiell' %}#6C757D
-                                            {% elif azienda == 'euxilia' %}#4A90C2
-                                            {% elif azienda == 'xva' %}#D4AF37
-                                            {% else %}#6C757D{% endif %}">
+                                        {% if azienda == 'auxiell' %}
+                                            {% set badge_color = '#6C757D' %}
+                                        {% elif azienda == 'euxilia' %}
+                                            {% set badge_color = '#4A90C2' %}
+                                        {% elif azienda == 'xva' %}
+                                            {% set badge_color = '#D4AF37' %}
+                                        {% else %}
+                                            {% set badge_color = '#6C757D' %}
+                                        {% endif %}
+                                        
+                                        <span class="badge" style="background-color: {{ badge_color }}">
                                             {{ azienda|title }}
                                         </span>
                                     </td>
@@ -114,7 +120,7 @@
                                     <td class="text-center">{{ stats.tests }}</td>
                                     <td class="text-center">
                                         {% if stats.users > 0 %}
-                                            {{ "%.1f"|format(stats.tests / stats.users) }}
+                                            {{ (stats.tests / stats.users)|round(1) }}
                                         {% else %}
                                             0
                                         {% endif %}
@@ -159,7 +165,15 @@
                                         </small>
                                     </div>
                                     <div class="text-end">
-                                        <span class="badge bg-{% if test.score >= 80 %}success{% elif test.score >= 60 %}warning{% else %}danger{% endif %} fs-6">
+                                        {% if test.score >= 80 %}
+                                            {% set badge_class = 'success' %}
+                                        {% elif test.score >= 60 %}
+                                            {% set badge_class = 'warning' %}
+                                        {% else %}
+                                            {% set badge_class = 'danger' %}
+                                        {% endif %}
+                                        
+                                        <span class="badge bg-{{ badge_class }} fs-6">
                                             {{ test.score }}%
                                         </span>
                                         <br>
@@ -256,7 +270,7 @@ async function syncData() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`Sincronizzazione completata!\nUtenti: ${data.users_count}\nRisultati: ${data.results_count}`);
+            alert('Sincronizzazione completata!\nUtenti: ' + data.users_count + '\nRisultati: ' + data.results_count);
             location.reload();
         } else {
             alert('Errore durante la sincronizzazione: ' + data.error);
