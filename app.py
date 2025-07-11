@@ -658,6 +658,19 @@ def dashboard():
 @app.route('/start_test/<test_name>')
 @login_required
 def start_test(test_name):
+    user_email = session.get('user_email')
+    
+    # CONTROLLO: Verifica se l'utente ha già completato questo test
+    completed_tests = get_user_test_results(user_email)
+    completed_test_names = [test['test_name'] for test in completed_tests]
+    
+    if test_name in completed_test_names:
+        # Test già completato - reindirizza alla dashboard con messaggio
+        return render_template('error.html', 
+                             error=f'Hai già completato il test "{test_name}". Ogni test può essere svolto una sola volta.',
+                             show_dashboard_button=True)
+    
+    # Se non completato, procedi normalmente
     session["test_scelto"] = test_name
     session["proseguito"] = False
     session["submitted"] = False
@@ -687,6 +700,57 @@ def start_test(test_name):
     except Exception as e:
         return render_template('error.html', error=f'Errore caricamento test: {e}')
 
+# 2. Modifica la route dashboard per mostrare chiaramente i test completati
+@app.route('/dashboard')
+@login_required 
+def dashboard():
+    try:
+        user_email = session.get('user_email')
+        azienda = session.get('azienda_scelta')
+        
+        completed_tests = get_user_test_results(user_email)
+        
+        available_tests = []
+        completed_test_names = [test['test_name'] for test in completed_tests]
+        
+        try:
+            tipologie_file = "repository_test/Tipologia Test.xlsx"
+            if os.path.exists(tipologie_file):
+                df_tipologie = pd.read_excel(tipologie_file)
+                
+                if "Nome test" in df_tipologie.columns:
+                    for _, row in df_tipologie.iterrows():
+                        test_name = row["Nome test"]
+                        
+                        test_available = True
+                        if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
+                            aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
+                            test_available = azienda in aziende_test
+                        
+                        if test_available:
+                            available_tests.append({
+                                'name': test_name,
+                                'completed': test_name in completed_test_names,
+                                'can_attempt': test_name not in completed_test_names  # NUOVO CAMPO
+                            })
+        except Exception as e:
+            print(f"Error loading tests: {e}")
+        
+        logo_path, logo_exists = get_logo_info(azienda)
+        company_color = get_company_color(azienda)
+        
+        return render_template('dashboard.html',
+                             completed_tests=completed_tests,
+                             available_tests=available_tests,
+                             utente=session.get('utente'),
+                             azienda=azienda,
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+    
+    except Exception as e:
+        print(f"Dashboard error: {e}")
+        return render_template('error.html', error=f'Errore dashboard: {e}')
+        
 @app.route('/quiz')
 @login_required
 def quiz():
@@ -1229,19 +1293,7 @@ def download_results(test_name=None):
             df_export = df_export[final_columns]
             df_export.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
         
-        # Proteggi il foglio riassunto
         buf.seek(0)
-        wb = load_workbook(buf)
-        
-        if "Riassunto" in wb.sheetnames:
-            ws = wb["Riassunto"]
-            ws.protection.sheet = True
-            ws.protection.password = "assessment25"
-            ws.protection.enable()
-        
-        buf_protetto = BytesIO()
-        wb.save(buf_protetto)
-        buf_protetto.seek(0)
         
         # Nome file
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1256,7 +1308,7 @@ def download_results(test_name=None):
         print("=== DOWNLOAD SUCCESS ===")
         
         return send_file(
-            buf_protetto,
+            buf,
             as_attachment=True,
             download_name=filename,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
