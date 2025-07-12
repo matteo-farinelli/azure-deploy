@@ -537,58 +537,7 @@ def test_error():
     
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '').strip()
-        confirm_password = request.form.get('confirm_password', '').strip()
-        
-        # Validazioni
-        if not validate_email(email):
-            return render_template('register.html', error='Email non valida. Usa il formato nome.cognome@azienda.com')
-        
-        if not password:
-            return render_template('register.html', error='Inserisci la password')
-        
-        if password != confirm_password:
-            return render_template('register.html', error='Le password non coincidono')
-        
-        # Valida password per utenti normali
-        if not is_admin_user(email):
-            is_valid, error_msg = validate_password(password)
-            if not is_valid:
-                return render_template('register.html', error=error_msg)
-        
-        # Controlla se utente esiste già
-        if user_exists(email):
-            return render_template('register.html', error='Utente già registrato. Usa il login.')
-        
-        try:
-            # Estrai informazioni dall'email
-            azienda = extract_company_from_email(email)
-            nome, cognome = extract_name_from_email(email)
-            is_admin = is_admin_user(email)
-            
-            # Crea l'utente
-            success = create_user(email, password, nome, cognome, azienda, is_admin)
-            
-            if success:
-                logger.info(f"✓ User registered: {email} (Admin: {is_admin})")
-                
-                if is_admin:
-                    success_msg = f'Registrazione completata! Account admin creato per {nome} {cognome}.'
-                else:
-                    success_msg = f'Registrazione completata! Account creato per {nome} {cognome}.'
-                
-                return render_template('login.html', success=success_msg)
-            else:
-                return render_template('register.html', error='Errore durante la registrazione. Riprova.')
-                
-        except Exception as e:
-            logger.error(f"Errore registrazione: {e}")
-            return render_template('register.html', error='Errore durante la registrazione. Riprova.')
-    
-    return render_template('register.html')
-
+    return "Registrazione temporaneamente disabilitata. <a href='/login'>Torna al Login</a>"
 @app.route('/dashboard')
 @login_required 
 def dashboard():
