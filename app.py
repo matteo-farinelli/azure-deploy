@@ -658,19 +658,6 @@ def dashboard():
 @app.route('/start_test/<test_name>')
 @login_required
 def start_test(test_name):
-    user_email = session.get('user_email')
-    
-    # CONTROLLO: Verifica se l'utente ha già completato questo test
-    completed_tests = get_user_test_results(user_email)
-    completed_test_names = [test['test_name'] for test in completed_tests]
-    
-    if test_name in completed_test_names:
-        # Test già completato - reindirizza alla dashboard con messaggio
-        return render_template('error.html', 
-                             error=f'Hai già completato il test "{test_name}". Ogni test può essere svolto una sola volta.',
-                             show_dashboard_button=True)
-    
-    # Se non completato, procedi normalmente
     session["test_scelto"] = test_name
     session["proseguito"] = False
     session["submitted"] = False
@@ -699,7 +686,7 @@ def start_test(test_name):
         
     except Exception as e:
         return render_template('error.html', error=f'Errore caricamento test: {e}')
-
+        
 # 2. Modifica la route dashboard per mostrare chiaramente i test completati
 @app.route('/dashboard')
 @login_required 
@@ -730,8 +717,7 @@ def dashboard():
                         if test_available:
                             available_tests.append({
                                 'name': test_name,
-                                'completed': test_name in completed_test_names,
-                                'can_attempt': test_name not in completed_test_names  # NUOVO CAMPO
+                                'completed': test_name in completed_test_names
                             })
         except Exception as e:
             print(f"Error loading tests: {e}")
