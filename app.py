@@ -116,14 +116,16 @@ def load_progress_data():
         "test_results": [],
         "last_updated": datetime.now().isoformat()
     }
+
 def is_admin_user(email):
-    """Verifica se l'utente è admin"""
+    """Verifica se l'utente è admin - UNICA FUNZIONE"""
     admin_emails = [
         'admin@auxiell.com',
         'admin@euxilia.com', 
         'admin@xva-services.com'
     ]
     return email.lower() in admin_emails
+
 def save_progress_data(data):
     """Salva progressi con gestione errori"""
     try:
@@ -272,6 +274,7 @@ def extract_name_from_admin_email(email):
     if email.startswith('admin@'):
         return "Admin", "Sistema"
     return extract_name_from_email(email)
+
 def hash_password(password):
     """Cripta la password"""
     return generate_password_hash(password)
@@ -279,15 +282,6 @@ def hash_password(password):
 def verify_password(stored_password, provided_password):
     """Verifica la password"""
     return check_password_hash(stored_password, provided_password)
-
-def is_admin_email(email):
-    """Verifica se è un email admin"""
-    admin_emails = [
-        'admin@auxiell.com',
-        'admin@euxilia.com', 
-        'admin@xva-services.com'
-    ]
-    return email.lower() in admin_emails
 
 def get_admin_password():
     """Password fissa per admin"""
@@ -338,7 +332,7 @@ def authenticate_user(email, password):
         return False, "Utente non trovato"
     
     # Per admin, controlla la password fissa
-    if is_admin_email(email):
+    if is_admin_user(email):
         if password == get_admin_password():
             return True, user_data
         else:
@@ -349,8 +343,8 @@ def authenticate_user(email, password):
         return True, user_data
     else:
         return False, "Password errata"
-# Routes
 
+# Routes
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
@@ -478,6 +472,7 @@ def admin_dashboard():
         import traceback
         traceback.print_exc()
         return render_template('error.html', error=f'Errore dashboard admin: {str(e)}')
+
 @app.route('/admin/download_report')
 @login_required
 def admin_download_report():
@@ -682,7 +677,7 @@ def register():
             return render_template('register.html', error='Le password non coincidono')
         
         # Valida password per utenti normali (admin ha password fissa)
-        if not is_admin_email(email):
+        if not is_admin_user(email):
             is_valid, error_msg = validate_password(password)
             if not is_valid:
                 return render_template('register.html', error=error_msg)
@@ -695,7 +690,7 @@ def register():
             # Estrai informazioni dall'email
             azienda = extract_company_from_email(email)
             nome, cognome = extract_name_from_email(email)
-            is_admin = is_admin_email(email)
+            is_admin = is_admin_user(email)
             
             # Per admin, ignora la password inserita e usa quella fissa
             if is_admin:
@@ -725,11 +720,10 @@ def register():
             return render_template('register.html', error='Errore durante la registrazione. Riprova.')
     
     return render_template('register.html')
-
+    
 @app.route('/forgot-password')
 def forgot_password():
     return render_template('forgot_password.html')
-
 
 @app.route('/logout')
 def logout():
@@ -812,7 +806,7 @@ def dashboard():
                             available_tests.append({
                                 'name': test_name,
                                 'completed': is_completed,
-                                'can_attempt': not is_completed  # AGGIUNTO QUESTO CAMPO
+                                'can_attempt': not is_completed
                             })
         except Exception as e:
             print(f"Error loading tests: {e}")
@@ -965,6 +959,7 @@ def show_quiz():
         import traceback
         traceback.print_exc()
         return render_template('error.html', error=f"Errore quiz: {e}")
+
 def clean_text(text):
     """Pulizia ultra-robusta del testo"""
     if text is None:
@@ -1041,8 +1036,6 @@ def answers_match(user_answer, correct_answer):
         print(f"    MATCH: Minimal comparison ✓")
         return True
     
-    print(f"    NO MATCH ✗")
-    return False
     
 @app.route('/submit_answers', methods=['POST'])
 @login_required
@@ -1267,8 +1260,6 @@ def debug_quiz_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-
 @app.route('/download_results')
 @app.route('/download_results/<test_name>')
 @login_required
@@ -1401,7 +1392,6 @@ def download_results(test_name=None):
         import traceback
         traceback.print_exc()
         return f"Errore durante il download: {e}", 500
-
 
 # Aggiungiamo anche un endpoint per scaricare test specifici dalla dashboard
 @app.route('/download_latest')
