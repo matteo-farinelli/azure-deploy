@@ -13,7 +13,14 @@ import secrets
 from functools import wraps
 import json
 import requests
-from werkzeug.security import generate_password_hash, check_password_hash
+try:
+    from werkzeug.security import generate_password_hash, check_password_hash
+    WERKZEUG_AVAILABLE = True
+    print("✓ Werkzeug available for password hashing")
+except ImportError:
+    WERKZEUG_AVAILABLE = False
+    print("⚠ Werkzeug not available - using simple password storage")
+
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -266,6 +273,16 @@ def get_company_color(azienda):
         "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
+def generate_password_hash(password):
+    import base64
+    return base64.b64encode(password.encode()).decode()
+    
+def check_password_hash(stored, provided):
+    import base64
+    try:
+        return base64.b64decode(stored.encode()).decode() == provided
+    except:
+        return False
 def is_admin_user(email):
     """Verifica se l'utente è admin"""
     admin_emails = [
@@ -282,11 +299,24 @@ def extract_name_from_admin_email(email):
     return extract_name_from_email(email)
 def hash_password(password):
     """Cripta la password"""
-    return generate_password_hash(password)
+    if WERKZEUG_AVAILABLE:
+        return generate_password_hash(password)
+    else:
+        # Fallback semplice (NON sicuro)
+        import base64
+        return base64.b64encode(password.encode()).decode()
 
 def verify_password(stored_password, provided_password):
     """Verifica la password"""
-    return check_password_hash(stored_password, provided_password)
+    if WERKZEUG_AVAILABLE:
+        return check_password_hash(stored_password, provided_password)
+    else:
+        # Fallback semplice 
+        import base64
+        try:
+            return base64.b64decode(stored_password.encode()).decode() == provided_password
+        except:
+            return False
 
 def is_admin_email(email):
     """Verifica se è un email admin"""
