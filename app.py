@@ -1392,26 +1392,6 @@ def safe_startup():
     except Exception as e:
         logger.error(f"Startup error (non-blocking): {e}")
 
-@app.route('/debug/info')
-def debug_info():
-    """Debug info per Azure"""
-    try:
-        import sys
-        return jsonify({
-            'python_version': sys.version,
-            'working_directory': os.getcwd(),
-            'files_in_directory': os.listdir('.'),
-            'templates_exist': os.path.exists('templates'),
-            'static_exists': os.path.exists('static'),
-            'repository_test_exists': os.path.exists('repository_test'),
-            'environment_vars': {
-                'WEBSITE_SITE_NAME': os.environ.get('WEBSITE_SITE_NAME'),
-                'GITHUB_CONFIGURED': bool(os.environ.get('GITHUB_TOKEN'))
-            }
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/minimal')
 def minimal_page():
     """Pagina minima per testare che Flask funzioni"""
