@@ -1327,11 +1327,147 @@ def startup_initialization():
     return False
 
 # Avvio dell'app
+# Avvio dell'app - VERSIONE CORRETTA PER AZURE
+def safe_startup():
+    """Inizializzazione sicura che non blocca l'avvio"""
+    try:
+        startup_initialization()
+    except Exception as e:
+        logger.error(f"Startup error (non-blocking): {e}")
+
 if __name__ == '__main__':
-    startup_initialization()
+    # Solo per testing locale
+    safe_startup()
     port = int(os.environ.get('PORT', 8000))
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(host='0.0.0.0', port=port, debug=debug)
 else:
-    # IMPORTANTE: Per Azure/Gunicorn WSGI
-    startup_initialization()
+    # Per Azure/Gunicorn - NON fare inizializzazione bloccante
+    logger.info("App started in WSGI mode")
+
+# AGGIUNGI questo route di emergency per debugging
+@app.route('/debug/info')
+def debug_info():
+    """Debug info per Azure"""
+    try:
+        import sys
+        import os
+        return jsonify({
+            'python_version': sys.version,
+            'working_directory': os.getcwd(),
+            'files_in_directory': os.listdir('.'),
+            'templates_exist': os.path.exists('templates'),
+            'static_exists': os.path.exists('static'),
+            'repository_test_exists': os.path.exists('repository_test'),
+            'environment_vars': {
+                'WEBSITE_SITE_NAME': os.environ.get('WEBSITE_SITE_NAME'),
+                'GITHUB_CONFIGURED': bool(os.environ.get('GITHUB_TOKEN'))
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# AGGIUNGI route di fallback per template mancanti
+# SOSTITUISCI la parte finale del tuo app.py (le ultime righe) con questo:
+
+# Avvio dell'app - VERSIONE CORRETTA PER AZURE
+def safe_startup():
+    """Inizializzazione sicura che non blocca l'avvio"""
+    try:
+        startup_initialization()
+    except Exception as e:
+        logger.error(f"Startup error (non-blocking): {e}")
+
+if __name__ == '__main__':
+    # Solo per testing locale
+    safe_startup()
+    port = int(os.environ.get('PORT', 8000))
+    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='0.0.0.0', port=port, debug=debug)
+else:
+    # Per Azure/Gunicorn - NON fare inizializzazione bloccante
+    logger.info("App started in WSGI mode")
+
+# AGGIUNGI questo route di emergency per debugging
+@app.route('/debug/info')
+def debug_info():
+    """Debug info per Azure"""
+    try:
+        import sys
+        import os
+        return jsonify({
+            'python_version': sys.version,
+            'working_directory': os.getcwd(),
+            'files_in_directory': os.listdir('.'),
+            'templates_exist': os.path.exists('templates'),
+            'static_exists': os.path.exists('static'),
+            'repository_test_exists': os.path.exists('repository_test'),
+            'environment_vars': {
+                'WEBSITE_SITE_NAME': os.environ.get('WEBSITE_SITE_NAME'),
+                'GITHUB_CONFIGURED': bool(os.environ.get('GITHUB_TOKEN'))
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# AGGIUNGI route di fallback per template mancanti
+def safe_startup():
+    """Inizializzazione sicura che non blocca l'avvio"""
+    try:
+        startup_initialization()
+    except Exception as e:
+        logger.error(f"Startup error (non-blocking): {e}")
+
+if __name__ == '__main__':
+    # Solo per testing locale
+    safe_startup()
+    port = int(os.environ.get('PORT', 8000))
+    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='0.0.0.0', port=port, debug=debug)
+else:
+    # Per Azure/Gunicorn - NON fare inizializzazione bloccante
+    logger.info("App started in WSGI mode")
+
+# AGGIUNGI questo route di emergency per debugging
+@app.route('/debug/info')
+def debug_info():
+    """Debug info per Azure"""
+    try:
+        import sys
+        import os
+        return jsonify({
+            'python_version': sys.version,
+            'working_directory': os.getcwd(),
+            'files_in_directory': os.listdir('.'),
+            'templates_exist': os.path.exists('templates'),
+            'static_exists': os.path.exists('static'),
+            'repository_test_exists': os.path.exists('repository_test'),
+            'environment_vars': {
+                'WEBSITE_SITE_NAME': os.environ.get('WEBSITE_SITE_NAME'),
+                'GITHUB_CONFIGURED': bool(os.environ.get('GITHUB_TOKEN'))
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# AGGIUNGI route di fallback per template mancanti
+@app.route('/minimal')
+def minimal_page():
+    """Pagina minima per testare che Flask funzioni"""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Assessment App - Azure Test</title></head>
+    <body>
+        <h1>✅ Flask App Running on Azure!</h1>
+        <p>Timestamp: {{ timestamp }}</p>
+        <ul>
+            <li><a href="/health">Health Check</a></li>
+            <li><a href="/debug/info">Debug Info</a></li>
+            <li><a href="/status">Status</a></li>
+        </ul>
+    </body>
+    </html>
+    """
+    from flask import render_template_string
+    return render_template_string(html, timestamp=datetime.now().isoformat())
