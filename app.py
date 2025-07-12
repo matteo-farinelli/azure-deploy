@@ -470,17 +470,18 @@ def login():
         password = request.form.get('password', '').strip()
         
         if not validate_email(email):
-            return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com o admin@azienda.com')
+            # TEMPORANEO: usa HTML semplice invece del template
+            return f"<h1>Errore: Email non valida</h1><a href='/login'>Riprova</a>"
         
         if not password:
-            return render_template('login.html', error='Inserisci la password')
+            return f"<h1>Errore: Inserisci la password</h1><a href='/login'>Riprova</a>"
         
         try:
             # Autentica l'utente
             is_authenticated, result = authenticate_user(email, password)
             
             if not is_authenticated:
-                return render_template('login.html', error=result)
+                return f"<h1>Errore: {result}</h1><a href='/login'>Riprova</a>"
             
             user_data = result
             
@@ -498,19 +499,52 @@ def login():
             
             logger.info(f"✓ Login successful: {email} (Admin: {user_data['is_admin']})")
             
-            # Redirect diverso per admin
-            if user_data['is_admin']:
-                return redirect(url_for('admin_dashboard'))
-            else:
-                return redirect(url_for('dashboard'))
+            return f"<h1>Login Successful!</h1><p>Welcome {user_data['nome']} {user_data['cognome']}</p>"
             
         except Exception as e:
             logger.error(f"Errore login: {e}")
-            return render_template('login.html', error='Errore durante il login. Riprova.')
+            return f"<h1>Errore: {str(e)}</h1><a href='/login'>Riprova</a>"
     
-    return render_template('login.html',
-                      azienda='auxiell',
-                      company_color='#6C757D')
+    # GET request - usa HTML semplice invece del template
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Login - Assessment App</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-light">
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="text-center mb-4">Login Test</h2>
+                            <form method="POST">
+                                <div class="mb-3">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control" name="email" 
+                                           placeholder="nome.cognome@auxiell.com" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" class="form-control" name="password" 
+                                           placeholder="Password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Login</button>
+                            </form>
+                            <div class="mt-3 text-center">
+                                <small>Test senza template Jinja2</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -752,7 +786,43 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
-
+@app.route('/test-simple-login')
+def test_simple_login():
+    """Test login con HTML semplice"""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Login Test</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-light">
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2>Login Test - Funziona!</h2>
+                            <form method="POST" action="/login">
+                                <div class="mb-3">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" class="form-control" name="password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Login</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
 # Endpoint per Azure monitoring
 @app.route('/status')
 def status():
