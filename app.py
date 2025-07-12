@@ -508,7 +508,9 @@ def login():
             logger.error(f"Errore login: {e}")
             return render_template('login.html', error='Errore durante il login. Riprova.')
     
-    return render_template('login.html')
+    return render_template('login.html',
+                      azienda='auxiell',
+                      company_color='#6C757D')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
