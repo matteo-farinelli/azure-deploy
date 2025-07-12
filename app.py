@@ -13,14 +13,7 @@ import secrets
 from functools import wraps
 import json
 import requests
-try:
-    from werkzeug.security import generate_password_hash, check_password_hash
-    WERKZEUG_AVAILABLE = True
-    print("✓ Werkzeug available for password hashing")
-except ImportError:
-    WERKZEUG_AVAILABLE = False
-    print("⚠ Werkzeug not available - using simple password storage")
-
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -273,16 +266,6 @@ def get_company_color(azienda):
         "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
-def generate_password_hash(password):
-    import base64
-    return base64.b64encode(password.encode()).decode()
-    
-def check_password_hash(stored, provided):
-    import base64
-    try:
-        return base64.b64decode(stored.encode()).decode() == provided
-    except:
-        return False
 def is_admin_user(email):
     """Verifica se l'utente è admin"""
     admin_emails = [
@@ -299,24 +282,11 @@ def extract_name_from_admin_email(email):
     return extract_name_from_email(email)
 def hash_password(password):
     """Cripta la password"""
-    if WERKZEUG_AVAILABLE:
-        return generate_password_hash(password)
-    else:
-        # Fallback semplice (NON sicuro)
-        import base64
-        return base64.b64encode(password.encode()).decode()
+    return generate_password_hash(password)
 
 def verify_password(stored_password, provided_password):
     """Verifica la password"""
-    if WERKZEUG_AVAILABLE:
-        return check_password_hash(stored_password, provided_password)
-    else:
-        # Fallback semplice 
-        import base64
-        try:
-            return base64.b64decode(stored_password.encode()).decode() == provided_password
-        except:
-            return False
+    return check_password_hash(stored_password, provided_password)
 
 def is_admin_email(email):
     """Verifica se è un email admin"""
@@ -819,7 +789,6 @@ def start_test(test_name):
     except Exception as e:
         return render_template('error.html', error=f'Errore caricamento test: {e}')
 
-# SOSTITUISCI la route dashboard (RIMUOVI QUELLA DUPLICATA) con questa versione unica:
 @app.route('/dashboard')
 @login_required 
 def dashboard():
@@ -1459,4 +1428,3 @@ except Exception as e:
 
 if __name__ == '__main__':
     app.run(debug=True)
-
