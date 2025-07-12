@@ -4,4 +4,3 @@ openpyxl
 gunicorn
 Werkzeug
 requests
-Werkzeug
