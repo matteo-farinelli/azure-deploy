@@ -441,19 +441,20 @@ def authenticate_user(email, password):
         return False, "Password errata"
 
 # Error handlers per Azure
-@app.errorhandler(404)
-def not_found_error(error):
-    logger.warning(f"404 error: {request.url}")
-    return render_template('error.html', error='Pagina non trovata'), 404
+# @app.errorhandler(404)
+# def not_found_error(error):
+#     logger.warning(f"404 error: {request.url}")
+#     return render_template('error.html', error='Pagina non trovata'), 404
 
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"500 error: {error}")
-    return render_template('error.html', error='Errore interno del server'), 500
 
-@app.errorhandler(413)
-def too_large(error):
-    return render_template('error.html', error='File troppo grande. Dimensione massima: 16MB'), 413
+# @app.errorhandler(500)
+# def internal_error(error):
+#     logger.error(f"500 error: {error}")
+#     return render_template('error.html', error='Errore interno del server'), 500
+
+# @app.errorhandler(413)
+# def too_large(error):
+#     return render_template('error.html', error='File troppo grande. Dimensione massima: 16MB'), 413
 
 # ===== ROUTES PRINCIPALI =====
 
