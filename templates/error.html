@@ -11,15 +11,9 @@
                 <h2 class="mb-3">Errore</h2>
                 <p class="text-muted mb-4">{{ error }}</p>
                 
-                {% if show_dashboard_button %}
-                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
-                        <i class="fas fa-home me-2"></i>Dashboard
-                    </a>
-                {% else %}
-                    <a href="{{ url_for('login') }}" class="btn btn-primary">
-                        <i class="fas fa-sign-in-alt me-2"></i>Login
-                    </a>
-                {% endif %}
+                <a href="{{ url_for('login') }}" class="btn btn-primary">
+                    <i class="fas fa-home me-2"></i>Torna alla Home
+                </a>
             </div>
         </div>
     </div>
