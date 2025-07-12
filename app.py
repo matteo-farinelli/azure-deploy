@@ -266,14 +266,6 @@ def get_company_color(azienda):
         "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
-def is_admin_user(email):
-    """Verifica se l'utente è admin"""
-    admin_emails = [
-        'admin@auxiell.com',
-        'admin@euxilia.com', 
-        'admin@xva-services.com'
-    ]
-    return email.lower() in admin_emails
 
 def extract_name_from_admin_email(email):
     """Estrae nome per admin"""
