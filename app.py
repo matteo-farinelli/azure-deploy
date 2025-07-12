@@ -1035,7 +1035,8 @@ def answers_match(user_answer, correct_answer):
     if user_minimal == correct_minimal:
         print(f"    MATCH: Minimal comparison ✓")
         return True
-    
+    print(f"    NO MATCH ✗")
+    return False
     
 @app.route('/submit_answers', methods=['POST'])
 @login_required
