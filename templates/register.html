@@ -1,0 +1,208 @@
+<!-- templates/register.html -->
+{% extends "base.html" %}
+
+{% block title %}Registrazione - Assessment App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <h2>Registrazione</h2>
+                        <p class="text-muted">Crea il tuo account</p>
+                    </div>
+                    
+                    <!-- Messaggi di errore -->
+                    {% if error %}
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Form di registrazione -->
+                    <form method="POST" id="registerForm">
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope me-2"></i>Email Aziendale
+                            </label>
+                            <input type="email" 
+                                   class="form-control" 
+                                   id="email" 
+                                   name="email" 
+                                   placeholder="nome.cognome@azienda.com"
+                                   value="{{ request.form.email if error else '' }}"
+                                   required>
+                            <div class="form-text">
+                                Usa il formato: nome.cognome@auxiell.com, @euxilia.com o @xva-services.com<br>
+                                Per admin: admin@azienda.com
+                            </div>
+                        </div>
+                        
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Password
+                            </label>
+                            <div class="input-group">
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="password" 
+                                       name="password" 
+                                       placeholder="Inserisci la password"
+                                       required>
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        onclick="togglePassword('password')">
+                                    <i class="fas fa-eye" id="password-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text" id="passwordHelp">
+                                Minimo 6 caratteri
+                            </div>
+                        </div>
+                        
+                        <!-- Conferma Password -->
+                        <div class="mb-4">
+                            <label for="confirm_password" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Conferma Password
+                            </label>
+                            <div class="input-group">
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="confirm_password" 
+                                       name="confirm_password" 
+                                       placeholder="Ripeti la password"
+                                       required>
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        onclick="togglePassword('confirm_password')">
+                                    <i class="fas fa-eye" id="confirm_password-eye"></i>
+                                </button>
+                            </div>
+                            <div id="passwordMatch" class="form-text"></div>
+                        </div>
+                        
+                        <!-- Alert per admin -->
+                        <div id="adminAlert" class="alert alert-info d-none">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            <strong>Account Amministratore:</strong> Stai registrando un account admin. 
+                            La password sarà sostituita con quella standard del sistema.
+                        </div>
+                        
+                        <!-- Pulsante registrazione -->
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                                <i class="fas fa-user-plus me-2"></i>Registrati
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Link al login -->
+                    <div class="text-center mt-4">
+                        <p class="text-muted">
+                            Hai già un account? 
+                            <a href="{{ url_for('login') }}" class="text-decoration-none">
+                                Effettua il login
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Funzione per mostrare/nascondere password
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const eye = document.getElementById(fieldId + '-eye');
+    
+    if (field.type === 'password') {
+        field.type = 'text';
+        eye.classList.remove('fa-eye');
+        eye.classList.add('fa-eye-slash');
+    } else {
+        field.type = 'password';
+        eye.classList.remove('fa-eye-slash');
+        eye.classList.add('fa-eye');
+    }
+}
+
+// Validazione in tempo reale
+document.addEventListener('DOMContentLoaded', function() {
+    const emailField = document.getElementById('email');
+    const passwordField = document.getElementById('password');
+    const confirmPasswordField = document.getElementById('confirm_password');
+    const passwordMatch = document.getElementById('passwordMatch');
+    const adminAlert = document.getElementById('adminAlert');
+    const passwordHelp = document.getElementById('passwordHelp');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Controlla se è admin email
+    emailField.addEventListener('input', function() {
+        const email = this.value.toLowerCase();
+        const isAdmin = email.startsWith('admin@') && 
+                       (email.includes('auxiell.com') || 
+                        email.includes('euxilia.com') || 
+                        email.includes('xva-services.com'));
+        
+        if (isAdmin) {
+            adminAlert.classList.remove('d-none');
+            passwordHelp.innerHTML = '<i class="fas fa-info-circle me-1"></i>Per admin viene usata la password standard del sistema';
+        } else {
+            adminAlert.classList.add('d-none');
+            passwordHelp.innerHTML = 'Minimo 6 caratteri';
+        }
+    });
+    
+    // Verifica corrispondenza password
+    function checkPasswordMatch() {
+        const password = passwordField.value;
+        const confirmPassword = confirmPasswordField.value;
+        
+        if (confirmPassword === '') {
+            passwordMatch.innerHTML = '';
+            passwordMatch.className = 'form-text';
+            return;
+        }
+        
+        if (password === confirmPassword) {
+            passwordMatch.innerHTML = '<i class="fas fa-check text-success me-1"></i>Le password coincidono';
+            passwordMatch.className = 'form-text text-success';
+        } else {
+            passwordMatch.innerHTML = '<i class="fas fa-times text-danger me-1"></i>Le password non coincidono';
+            passwordMatch.className = 'form-text text-danger';
+        }
+    }
+    
+    passwordField.addEventListener('input', checkPasswordMatch);
+    confirmPasswordField.addEventListener('input', checkPasswordMatch);
+    
+    // Validazione form
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        const password = passwordField.value;
+        const confirmPassword = confirmPasswordField.value;
+        
+        if (password !== confirmPassword) {
+            e.preventDefault();
+            alert('Le password non coincidono!');
+            return false;
+        }
+        
+        if (password.length < 6 && !emailField.value.toLowerCase().startsWith('admin@')) {
+            e.preventDefault();
+            alert('La password deve essere di almeno 6 caratteri!');
+            return false;
+        }
+        
+        // Disabilita il pulsante per evitare doppi submit
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registrando...';
+    });
+});
+</script>
+{% endblock %}
