@@ -1328,8 +1328,6 @@ def startup_initialization():
     logger.warning("Inizializzazione completata con errori - App in modalità degradata")
     return False
 
-# Avvio dell'app
-# Avvio dell'app - VERSIONE CORRETTA PER AZURE
 def safe_startup():
     """Inizializzazione sicura che non blocca l'avvio"""
     try:
@@ -1337,17 +1335,6 @@ def safe_startup():
     except Exception as e:
         logger.error(f"Startup error (non-blocking): {e}")
 
-if __name__ == '__main__':
-    # Solo per testing locale
-    safe_startup()
-    port = int(os.environ.get('PORT', 8000))
-    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
-else:
-    # Per Azure/Gunicorn - NON fare inizializzazione bloccante
-    logger.info("App started in WSGI mode")
-
-# AGGIUNGI questo route di emergency per debugging
 @app.route('/debug/info')
 def debug_info():
     """Debug info per Azure"""
@@ -1368,31 +1355,6 @@ def debug_info():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# Inizializzazione sicura all'avvio
-def startup_initialization():
-    """Inizializzazione sicura con retry"""
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            logger.info(f"=== Tentativo inizializzazione {attempt + 1}/{max_attempts} ===")
-            initialize_storage()
-            logger.info("=== App Pronta ===")
-            return True
-        except Exception as e:
-            logger.error(f"Tentativo {attempt + 1} fallito: {e}")
-            if attempt < max_attempts - 1:
-                time.sleep(2)
-    
-    logger.warning("Inizializzazione completata con errori - App in modalità degradata")
-    return False
-
-def safe_startup():
-    """Inizializzazione sicura che non blocca l'avvio"""
-    try:
-        startup_initialization()
-    except Exception as e:
-        logger.error(f"Startup error (non-blocking): {e}")
 
 @app.route('/minimal')
 def minimal_page():
@@ -1422,5 +1384,3 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=debug)
 else:
     logger.info("App started in WSGI mode")
-
-
