@@ -471,18 +471,26 @@ def login():
         password = request.form.get('password', '').strip()
         
         if not validate_email(email):
-            # TEMPORANEO: usa HTML semplice invece del template
-            return f"<h1>Errore: Email non valida</h1><a href='/login'>Riprova</a>"
+            return render_template('login.html', 
+                                 error='Email non valida. Usa il formato nome.cognome@azienda.com o admin@azienda.com',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
         
         if not password:
-            return f"<h1>Errore: Inserisci la password</h1><a href='/login'>Riprova</a>"
+            return render_template('login.html', 
+                                 error='Inserisci la password',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
         
         try:
             # Autentica l'utente
             is_authenticated, result = authenticate_user(email, password)
             
             if not is_authenticated:
-                return f"<h1>Errore: {result}</h1><a href='/login'>Riprova</a>"
+                return render_template('login.html', 
+                                     error=result,
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
             
             user_data = result
             
@@ -500,53 +508,23 @@ def login():
             
             logger.info(f"✓ Login successful: {email} (Admin: {user_data['is_admin']})")
             
-            return f"<h1>Login Successful!</h1><p>Welcome {user_data['nome']} {user_data['cognome']}</p>"
+            # Redirect diverso per admin
+            if user_data['is_admin']:
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('dashboard'))
             
         except Exception as e:
             logger.error(f"Errore login: {e}")
-            return f"<h1>Errore: {str(e)}</h1><a href='/login'>Riprova</a>"
+            return render_template('login.html', 
+                                 error='Errore durante il login. Riprova.',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
     
-    # GET request - usa HTML semplice invece del template
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Login - Assessment App</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="bg-light">
-        <div class="container mt-5">
-            <div class="row justify-content-center">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h2 class="text-center mb-4">Login Test</h2>
-                            <form method="POST">
-                                <div class="mb-3">
-                                    <label class="form-label">Email</label>
-                                    <input type="email" class="form-control" name="email" 
-                                           placeholder="nome.cognome@auxiell.com" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Password</label>
-                                    <input type="password" class="form-control" name="password" 
-                                           placeholder="Password" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">Login</button>
-                            </form>
-                            <div class="mt-3 text-center">
-                                <small>Test senza template Jinja2</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    return html
-
+    # GET request - template normale
+    return render_template('login.html',
+                          azienda='auxiell',
+                          company_color='#6C757D')
 @app.route('/ultra-test')
 def ultra_test():
     """Test più semplice possibile"""
