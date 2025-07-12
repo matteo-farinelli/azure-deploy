@@ -13,6 +13,7 @@ import secrets
 from functools import wraps
 import json
 import requests
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -279,8 +280,84 @@ def extract_name_from_admin_email(email):
     if email.startswith('admin@'):
         return "Admin", "Sistema"
     return extract_name_from_email(email)
+def hash_password(password):
+    """Cripta la password"""
+    return generate_password_hash(password)
+
+def verify_password(stored_password, provided_password):
+    """Verifica la password"""
+    return check_password_hash(stored_password, provided_password)
+
+def is_admin_email(email):
+    """Verifica se è un email admin"""
+    admin_emails = [
+        'admin@auxiell.com',
+        'admin@euxilia.com', 
+        'admin@xva-services.com'
+    ]
+    return email.lower() in admin_emails
+
+def get_admin_password():
+    """Password fissa per admin"""
+    return "assessment25"
+
+def validate_password(password):
+    """Valida la password (lunghezza minima)"""
+    if len(password) < 6:
+        return False, "La password deve essere di almeno 6 caratteri"
+    return True, ""
+
+def user_exists(email):
+    """Verifica se l'utente esiste già"""
+    data = load_progress_data()
+    return email in data.get("users", {})
+
+def create_user(email, password, nome, cognome, azienda, is_admin=False):
+    """Crea un nuovo utente"""
+    data = load_progress_data()
+    
+    # Per admin, usa password fissa, per utenti normali cripta la password
+    if is_admin:
+        password_hash = hash_password(get_admin_password())
+    else:
+        password_hash = hash_password(password)
+    
+    user_data = {
+        'email': email,
+        'password_hash': password_hash,
+        'nome': nome,
+        'cognome': cognome,
+        'azienda': azienda,
+        'is_admin': is_admin,
+        'created_at': datetime.now().isoformat(),
+        'last_login': None
+    }
+    
+    data["users"][email] = user_data
+    save_progress_data(data)
+    return True
+
+def authenticate_user(email, password):
+    """Autentica un utente"""
+    data = load_progress_data()
+    user_data = data.get("users", {}).get(email)
+    
+    if not user_data:
+        return False, "Utente non trovato"
+    
+    # Per admin, controlla la password fissa
+    if is_admin_email(email):
+        if password == get_admin_password():
+            return True, user_data
+        else:
+            return False, "Password admin errata"
+    
+    # Per utenti normali, controlla la password hash
+    if verify_password(user_data.get('password_hash', ''), password):
+        return True, user_data
+    else:
+        return False, "Password errata"
 # Routes
-# Sostituisci la route admin_dashboard nel tuo app.py con questa versione aggiornata:
 
 @app.route('/admin/dashboard')
 @login_required
@@ -548,49 +625,43 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
-# Aggiorna la route login per gestire admin:
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
         
         if not validate_email(email):
             return render_template('login.html', error='Email non valida. Usa il formato nome.cognome@azienda.com o admin@azienda.com')
         
+        if not password:
+            return render_template('login.html', error='Inserisci la password')
+        
         try:
-            azienda = extract_company_from_email(email)
-            nome, cognome = extract_name_from_email(email)
+            # Autentica l'utente
+            is_authenticated, result = authenticate_user(email, password)
             
-            # Carica o crea utente
-            user_data = get_user_data(email)
+            if not is_authenticated:
+                return render_template('login.html', error=result)
             
-            if not user_data:
-                user_data = {
-                    'email': email,
-                    'nome': nome,
-                    'cognome': cognome,
-                    'azienda': azienda,
-                    'is_admin': is_admin_user(email),
-                    'created_at': datetime.now().isoformat(),
-                    'last_login': datetime.now().isoformat()
-                }
-                print(f"✓ Nuovo utente: {email} (Admin: {is_admin_user(email)})")
-            else:
-                user_data['last_login'] = datetime.now().isoformat()
-                user_data['is_admin'] = is_admin_user(email)
-                print(f"✓ Login utente esistente: {email} (Admin: {is_admin_user(email)})")
+            user_data = result
             
+            # Aggiorna ultimo login
+            user_data['last_login'] = datetime.now().isoformat()
             save_user_data(email, user_data)
             
+            # Imposta la sessione
             session['logged_in'] = True
             session['user_email'] = email
-            session['utente'] = f"{nome} {cognome}"
-            session['azienda_scelta'] = azienda
-            session['is_admin'] = is_admin_user(email)
+            session['utente'] = f"{user_data['nome']} {user_data['cognome']}"
+            session['azienda_scelta'] = user_data['azienda']
+            session['is_admin'] = user_data['is_admin']
             session.permanent = True
             
+            print(f"✓ Login successful: {email} (Admin: {user_data['is_admin']})")
+            
             # Redirect diverso per admin
-            if is_admin_user(email):
+            if user_data['is_admin']:
                 return redirect(url_for('admin_dashboard'))
             else:
                 return redirect(url_for('dashboard'))
@@ -600,6 +671,73 @@ def login():
             return render_template('login.html', error='Errore durante il login. Riprova.')
     
     return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        # Validazioni
+        if not validate_email(email):
+            return render_template('register.html', error='Email non valida. Usa il formato nome.cognome@azienda.com')
+        
+        if not password:
+            return render_template('register.html', error='Inserisci la password')
+        
+        if password != confirm_password:
+            return render_template('register.html', error='Le password non coincidono')
+        
+        # Valida password per utenti normali (admin ha password fissa)
+        if not is_admin_email(email):
+            is_valid, error_msg = validate_password(password)
+            if not is_valid:
+                return render_template('register.html', error=error_msg)
+        
+        # Controlla se utente esiste già
+        if user_exists(email):
+            return render_template('register.html', error='Utente già registrato. Usa il login.')
+        
+        try:
+            # Estrai informazioni dall'email
+            azienda = extract_company_from_email(email)
+            nome, cognome = extract_name_from_email(email)
+            is_admin = is_admin_email(email)
+            
+            # Per admin, ignora la password inserita e usa quella fissa
+            if is_admin:
+                password_to_use = get_admin_password()
+                print(f"Admin registration: using fixed password")
+            else:
+                password_to_use = password
+            
+            # Crea l'utente
+            success = create_user(email, password_to_use, nome, cognome, azienda, is_admin)
+            
+            if success:
+                print(f"✓ User registered: {email} (Admin: {is_admin})")
+                
+                # Messaggio di successo diverso per admin
+                if is_admin:
+                    success_msg = f'Registrazione completata! Account admin creato per {nome} {cognome}. Puoi ora effettuare il login con la password standard.'
+                else:
+                    success_msg = f'Registrazione completata! Account creato per {nome} {cognome}. Puoi ora effettuare il login.'
+                
+                return render_template('login.html', success=success_msg)
+            else:
+                return render_template('register.html', error='Errore durante la registrazione. Riprova.')
+                
+        except Exception as e:
+            print(f"Errore registrazione: {e}")
+            return render_template('register.html', error='Errore durante la registrazione. Riprova.')
+    
+    return render_template('register.html')
+
+@app.route('/forgot-password')
+def forgot_password():
+    return render_template('forgot_password.html')
+
 
 @app.route('/logout')
 def logout():
