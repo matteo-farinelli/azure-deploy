@@ -546,6 +546,16 @@ def login():
     """
     return html
 
+@app.route('/ultra-test')
+def ultra_test():
+    """Test più semplice possibile"""
+    return "FUNZIONA!"
+
+@app.route('/test-error')  
+def test_error():
+    """Forza un errore per vedere error handler"""
+    raise Exception("Test errore intenzionale")
+    
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
