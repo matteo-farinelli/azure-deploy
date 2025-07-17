@@ -436,7 +436,7 @@ def authenticate_user(email, password):
     else:
         return False, "Password errata"
         
-Error handlers per Azure
+# Error handlers per Azure
 @app.errorhandler(404)
 def not_found_error(error):
     logger.warning(f"404 error: {request.url}")
