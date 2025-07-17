@@ -13,10 +13,10 @@ import secrets
 from functools import wraps
 import json
 import requests
-from werkzeug.security import generate_password_hash, check_password_hash
 import logging
 from threading import Thread
 import time
+import hashlib
 
 # Configurazione logging per Azure
 logging.basicConfig(
@@ -372,12 +372,12 @@ def get_company_color(azienda):
     return colori.get(azienda.lower() if azienda else "", "#F63366")
 
 def hash_password(password):
-    """Cripta la password"""
-    return generate_password_hash(password, method='pbkdf2:sha256')
+    """Cripta la password usando SHA-256"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 def verify_password(stored_password, provided_password):
     """Verifica la password"""
-    return check_password_hash(stored_password, provided_password)
+    return stored_password == hash_password(provided_password)
 
 def get_admin_password():
     """Password fissa per admin"""
@@ -388,11 +388,6 @@ def validate_password(password):
     if len(password) < 6:
         return False, "La password deve essere di almeno 6 caratteri"
     return True, ""
-
-def user_exists(email):
-    """Verifica se l'utente esiste già"""
-    data = load_progress_data()
-    return email in data.get("users", {})
 
 def create_user(email, password, nome, cognome, azienda, is_admin=False):
     """Crea un nuovo utente"""
@@ -429,32 +424,33 @@ def authenticate_user(email, password):
         return False, "Utente non trovato"
     
     # Verifica password
-    password_correct = False
     if is_admin_user(email):
+        # Admin usa password in chiaro
         password_correct = password == get_admin_password()
     else:
+        # Utenti normali usano hash
         password_correct = verify_password(user_data.get('password_hash', ''), password)
     
     if password_correct:
         return True, user_data
     else:
         return False, "Password errata"
+        
+Error handlers per Azure
+@app.errorhandler(404)
+def not_found_error(error):
+    logger.warning(f"404 error: {request.url}")
+    return render_template('error.html', error='Pagina non trovata'), 404
 
-# Error handlers per Azure
-# @app.errorhandler(404)
-# def not_found_error(error):
-#     logger.warning(f"404 error: {request.url}")
-#     return render_template('error.html', error='Pagina non trovata'), 404
 
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"500 error: {error}")
+    return render_template('error.html', error='Errore interno del server'), 500
 
-# @app.errorhandler(500)
-# def internal_error(error):
-#     logger.error(f"500 error: {error}")
-#     return render_template('error.html', error='Errore interno del server'), 500
-
-# @app.errorhandler(413)
-# def too_large(error):
-#     return render_template('error.html', error='File troppo grande. Dimensione massima: 16MB'), 413
+@app.errorhandler(413)
+def too_large(error):
+    return render_template('error.html', error='File troppo grande. Dimensione massima: 16MB'), 413
 
 # ===== ROUTES PRINCIPALI =====
 
