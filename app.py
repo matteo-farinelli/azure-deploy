@@ -1,4 +1,3 @@
-# app.py - Versione completa e corretta per Azure
 from flask import Flask, render_template, request, session, jsonify, send_file, redirect, url_for
 import pandas as pd
 from datetime import datetime, timedelta
