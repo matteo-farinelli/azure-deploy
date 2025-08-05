@@ -16,6 +16,8 @@ import logging
 from threading import Thread
 import time
 import hashlib
+from azure.data.tables import TableServiceClient, TableEntity
+from azure.core.exceptions import ResourceNotFoundError
 
 # Configurazione logging per Azure
 logging.basicConfig(
@@ -33,7 +35,9 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = int(os.environ.get('SESSION_TIMEOUT', '3600'))
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
+AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+TABLE_NAME_USERS = 'users'
+TABLE_NAME_RESULTS = 'testresults'
 # Configurazione GitHub
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = os.environ.get('GITHUB_REPO')
@@ -284,6 +288,31 @@ def save_to_github_async(data):
 
 # Funzioni helper
 def get_user_data(email):
+    """Recupera dati utente da Azure o locale"""
+    # Prima prova Azure
+    service = get_table_service()
+    if service:
+        try:
+            table_client = service.get_table_client(TABLE_NAME_USERS)
+            
+            # Cerca in tutte le partizioni
+            users = table_client.query_entities(f"RowKey eq '{email}'")
+            
+            for user in users:
+                return {
+                    'email': user['email'],
+                    'nome': user.get('nome', ''),
+                    'cognome': user.get('cognome', ''),
+                    'azienda': user.get('azienda', ''),
+                    'is_admin': user.get('is_admin', False),
+                    'created_at': user.get('created_at', ''),
+                    'last_login': user.get('last_login', ''),
+                    'password_hash': user.get('password_hash', '')
+                }
+        except Exception as e:
+            logger.error(f"Errore recupero da Azure: {e}")
+    
+    # Fallback su locale
     data = load_progress_data()
     return data["users"].get(email, {})
 
@@ -295,6 +324,34 @@ def save_user_data(email, user_info):
         logger.error(f"Fallimento salvataggio dati utente: {email}")
 
 def get_user_test_results(email):
+    """Recupera risultati test da Azure o locale"""
+    # Prima prova Azure
+    service = get_table_service()
+    if service:
+        try:
+            table_client = service.get_table_client(TABLE_NAME_RESULTS)
+            
+            results = table_client.query_entities(f"user_email eq '{email}'")
+            
+            test_results = []
+            for result in results:
+                test_results.append({
+                    'user_email': result['user_email'],
+                    'test_name': result['test_name'],
+                    'azienda': result.get('PartitionKey', ''),
+                    'score': result.get('score', 0),
+                    'correct_answers': result.get('correct_answers', 0),
+                    'total_questions': result.get('total_questions', 0),
+                    'completed_at': result.get('completed_at', ''),
+                    'answers_json': result.get('answers_json', '[]')
+                })
+            
+            if test_results:
+                return sorted(test_results, key=lambda x: x.get("completed_at", ""), reverse=True)
+        except Exception as e:
+            logger.error(f"Errore recupero risultati Azure: {e}")
+    
+    # Fallback su locale
     data = load_progress_data()
     user_results = []
     for result in data["test_results"]:
@@ -303,15 +360,46 @@ def get_user_test_results(email):
     return sorted(user_results, key=lambda x: x.get("completed_at", ""), reverse=True)
 
 def save_test_result(result):
-    data = load_progress_data()
-    result["id"] = len(data["test_results"]) + 1
+    """Salva risultato test sia su Azure che localmente"""
+    # Aggiungi timestamp e ID
+    result["id"] = len(load_progress_data()["test_results"]) + 1
     result["completed_at"] = datetime.now().isoformat()
+    
+    # Prima prova Azure
+    service = get_table_service()
+    if service:
+        try:
+            table_client = service.get_table_client(TABLE_NAME_RESULTS)
+            
+            # Genera ID univoco per Azure
+            result_id = f"{result['user_email']}_{datetime.now().timestamp()}"
+            
+            entity = {
+                'PartitionKey': result.get('azienda', 'default'),
+                'RowKey': result_id,
+                'user_email': result['user_email'],
+                'test_name': result['test_name'],
+                'score': result['score'],
+                'correct_answers': result['correct_answers'],
+                'total_questions': result['total_questions'],
+                'completed_at': result['completed_at'],
+                'answers_json': result['answers_json']
+            }
+            
+            table_client.upsert_entity(entity)
+            logger.info(f"Risultato test salvato in Azure Table")
+        except Exception as e:
+            logger.error(f"Errore salvataggio risultato Azure: {e}")
+    
+    # Salva anche localmente
+    data = load_progress_data()
     data["test_results"].append(result)
     success = save_progress_data(data)
     if success:
         logger.info(f"Test result saved for {result.get('user_email')}")
     else:
         logger.error(f"Failed to save test result for {result.get('user_email')}")
+
 
 def validate_email(email):
     """Valida email aziendale inclusi admin"""
@@ -434,6 +522,78 @@ def authenticate_user(email, password):
         return True, user_data
     else:
         return False, "Password errata"
+
+def get_table_service():
+    """Ottiene il client per Azure Table Storage"""
+    if not AZURE_STORAGE_CONNECTION_STRING:
+        logger.warning("Azure Storage non configurato, uso file locale")
+        return None
+    
+    try:
+        return TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    except Exception as e:
+        logger.error(f"Errore connessione Azure Storage: {e}")
+        return None
+
+def initialize_azure_tables():
+    """Crea le tabelle se non esistono"""
+    service = get_table_service()
+    if not service:
+        return False
+    
+    try:
+        # Crea tabella users
+        try:
+            service.create_table(TABLE_NAME_USERS)
+            logger.info(f"Tabella {TABLE_NAME_USERS} creata")
+        except:
+            pass  # Tabella già esistente
+        
+        # Crea tabella results
+        try:
+            service.create_table(TABLE_NAME_RESULTS)
+            logger.info(f"Tabella {TABLE_NAME_RESULTS} creata")
+        except:
+            pass  # Tabella già esistente
+        
+        return True
+    except Exception as e:
+        logger.error(f"Errore inizializzazione tabelle: {e}")
+        return False
+
+# 4. MODIFICA LA FUNZIONE save_user_data ESISTENTE
+def save_user_data(email, user_info):
+    """Salva dati utente sia su Azure che localmente"""
+    # Prima prova Azure
+    service = get_table_service()
+    if service:
+        try:
+            table_client = service.get_table_client(TABLE_NAME_USERS)
+            
+            entity = {
+                'PartitionKey': user_info.get('azienda', 'default'),
+                'RowKey': email,
+                'email': email,
+                'nome': user_info.get('nome', ''),
+                'cognome': user_info.get('cognome', ''),
+                'azienda': user_info.get('azienda', ''),
+                'is_admin': user_info.get('is_admin', False),
+                'created_at': user_info.get('created_at', ''),
+                'last_login': user_info.get('last_login', ''),
+                'password_hash': user_info.get('password_hash', '')
+            }
+            
+            table_client.upsert_entity(entity)
+            logger.info(f"Utente {email} salvato in Azure Table")
+        except Exception as e:
+            logger.error(f"Errore salvataggio Azure: {e}")
+    
+    # Salva anche localmente come backup
+    data = load_progress_data()
+    data["users"][email] = user_info
+    success = save_progress_data(data)
+    if not success:
+        logger.error(f"Fallimento salvataggio dati utente: {email}")
         
 # Error handlers per Azure
 @app.errorhandler(404)
@@ -693,6 +853,18 @@ def health_check():
         data = load_progress_data()
         github_status = "connected" if GITHUB_TOKEN and GITHUB_REPO else "not_configured"
         
+        # Test Azure Storage
+        azure_status = "not_configured"
+        if AZURE_STORAGE_CONNECTION_STRING:
+            try:
+                service = get_table_service()
+                if service:
+                    # Prova a listare tabelle
+                    list(service.list_tables())
+                    azure_status = "connected"
+            except:
+                azure_status = "error"
+        
         # Test connessione GitHub
         if github_status == "connected":
             try:
@@ -707,6 +879,7 @@ def health_check():
             'users_count': len(data.get('users', {})),
             'results_count': len(data.get('test_results', [])),
             'github_status': github_status,
+            'azure_storage_status': azure_status,  # NUOVO!
             'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE),
             'cache_active': _data_cache is not None,
             'timestamp': datetime.now().isoformat(),
@@ -719,6 +892,7 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
+        
 @app.route('/test-simple-login')
 def test_simple_login():
     """Test login con HTML semplice"""
@@ -1320,6 +1494,15 @@ def startup_initialization():
     for attempt in range(max_attempts):
         try:
             logger.info(f"=== Tentativo inizializzazione {attempt + 1}/{max_attempts} ===")
+            
+            # Inizializza Azure Tables se configurato
+            if AZURE_STORAGE_CONNECTION_STRING:
+                if initialize_azure_tables():
+                    logger.info("✓ Azure Table Storage inizializzato")
+                else:
+                    logger.warning("Azure Table Storage non disponibile")
+            
+            # Inizializza storage normale
             initialize_storage()
             logger.info("=== App Pronta ===")
             return True
