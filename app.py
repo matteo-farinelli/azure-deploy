@@ -45,7 +45,7 @@ GITHUB_BRANCH = os.environ.get('GITHUB_BRANCH', 'main')
 PROGRESS_FILE = 'data/user_progress.json'
 LOCAL_PROGRESS_FILE = 'user_progress.json'
 
-# Cache in memoria per ridurre chiamate a GitHub
+# Cache in memoria per ridurre chiamate a GitHub -
 _data_cache = None
 _cache_timestamp = None
 CACHE_DURATION = 300  # 5 minuti
