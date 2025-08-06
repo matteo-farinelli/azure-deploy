@@ -680,9 +680,88 @@ def test_error():
     """Forza un errore per vedere error handler"""
     raise Exception("Test errore intenzionale")
     
+# Sostituisci la route /register esistente con questa:
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    return "Registrazione temporaneamente disabilitata. <a href='/login'>Torna al Login</a>"
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
+        password_confirm = request.form.get('password_confirm', '').strip()
+        
+        # Validazione email
+        if not validate_email(email):
+            return render_template('register.html', 
+                                 error='Email non valida. Usa il formato nome.cognome@azienda.com',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        # Verifica se l'utente esiste già
+        existing_user = get_user_data(email)
+        if existing_user:
+            return render_template('register.html', 
+                                 error='Email già registrata. Usa il login.',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        # Validazione password
+        if not password:
+            return render_template('register.html', 
+                                 error='La password è obbligatoria',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        if password != password_confirm:
+            return render_template('register.html', 
+                                 error='Le password non coincidono',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        is_valid, error_msg = validate_password(password)
+        if not is_valid:
+            return render_template('register.html', 
+                                 error=error_msg,
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        # Non permettere registrazione di account admin
+        if email.startswith('admin@'):
+            return render_template('register.html', 
+                                 error='Non puoi registrare un account admin',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        try:
+            # Estrai informazioni dall'email
+            nome, cognome = extract_name_from_email(email)
+            azienda = extract_company_from_email(email)
+            
+            # Crea nuovo utente
+            success = create_user(email, password, nome, cognome, azienda, is_admin=False)
+            
+            if success:
+                logger.info(f"✓ Nuovo utente registrato: {email}")
+                return render_template('login.html', 
+                                     success='Registrazione completata! Ora puoi accedere.',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
+            else:
+                return render_template('register.html', 
+                                     error='Errore durante la registrazione. Riprova.',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
+                
+        except Exception as e:
+            logger.error(f"Errore registrazione: {e}")
+            return render_template('register.html', 
+                                 error='Errore durante la registrazione. Riprova.',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+    
+    # GET request
+    return render_template('register.html',
+                          azienda='auxiell',
+                          company_color='#6C757D')
 @app.route('/dashboard')
 @login_required 
 def dashboard():
