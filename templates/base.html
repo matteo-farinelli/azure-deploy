@@ -80,14 +80,14 @@
         }
     
         .navbar {
-                background: {% if azienda == 'auxiell' %}
-                    linear-gradient(90deg, #6C757D, #5A6268) !important;
+            {% if azienda == 'auxiell' %}
+                background: linear-gradient(90deg, #6C757D, #5A6268) !important;
             {% elif azienda == 'euxilia' %}
-                linear-gradient(90deg, #4A90C2, #357ABD) !important;
+                background: linear-gradient(90deg, #4A90C2, #357ABD) !important;
             {% elif azienda == 'xva' %}
-                linear-gradient(90deg, #D4AF37, #B8941F) !important;
+                background: linear-gradient(90deg, #D4AF37, #B8941F) !important;
             {% else %}
-                linear-gradient(90deg, #6C757D, #5A6268) !important;
+                background: linear-gradient(90deg, #6C757D, #5A6268) !important;
             {% endif %}
             backdrop-filter: blur(10px);
         }
@@ -114,14 +114,14 @@
         }
     
         .stats-card {
-            background: {% if azienda == 'auxiell' %}
-                linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
+            {% if azienda == 'auxiell' %}
+                background: linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
             {% elif azienda == 'euxilia' %}
-                linear-gradient(135deg, #4A90C2, rgba(74, 144, 194, 0.9));
+                background: linear-gradient(135deg, #4A90C2, rgba(74, 144, 194, 0.9));
             {% elif azienda == 'xva' %}
-                linear-gradient(135deg, #D4AF37, rgba(212, 175, 55, 0.9));
+                background: linear-gradient(135deg, #D4AF37, rgba(212, 175, 55, 0.9));
             {% else %}
-                linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
+                background: linear-gradient(135deg, #6C757D, rgba(108, 117, 125, 0.9));
             {% endif %}
             color: white;
             border-radius: 15px;
