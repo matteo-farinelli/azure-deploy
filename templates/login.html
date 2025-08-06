@@ -1,4 +1,3 @@
-<!-- templates/login.html - Versione Aggiornata con Password -->
 {% extends "base.html" %}
 
 {% block title %}Login - Assessment App{% endblock %}
@@ -14,23 +13,19 @@
                         <p class="text-muted">Accedi al tuo account</p>
                     </div>
                     
-                    <!-- Messaggio di successo (dopo registrazione) -->
                     {% if success %}
                         <div class="alert alert-success" role="alert">
                             <i class="fas fa-check-circle me-2"></i>{{ success }}
                         </div>
                     {% endif %}
                     
-                    <!-- Messaggi di errore -->
                     {% if error %}
                         <div class="alert alert-danger" role="alert">
                             <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
                         </div>
                     {% endif %}
                     
-                    <!-- Form di login -->
                     <form method="POST" id="loginForm">
-                        <!-- Email -->
                         <div class="mb-3">
                             <label for="email" class="form-label">
                                 <i class="fas fa-envelope me-2"></i>Email
@@ -44,7 +39,6 @@
                                    required>
                         </div>
                         
-                        <!-- Password -->
                         <div class="mb-3">
                             <label for="password" class="form-label">
                                 <i class="fas fa-lock me-2"></i>Password
@@ -64,13 +58,11 @@
                             </div>
                         </div>
                         
-                        <!-- Alert per admin -->
                         <div id="adminAlert" class="alert alert-info d-none">
                             <i class="fas fa-shield-alt me-2"></i>
                             <strong>Account Amministratore:</strong> Usa la password standard: <code>assessment25</code>
                         </div>
                         
-                        <!-- Checkbox ricordami (opzionale) -->
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="rememberMe" name="remember_me">
                             <label class="form-check-label" for="rememberMe">
@@ -78,7 +70,6 @@
                             </label>
                         </div>
                         
-                        <!-- Pulsante login -->
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                                 <i class="fas fa-sign-in-alt me-2"></i>Accedi
@@ -86,7 +77,6 @@
                         </div>
                     </form>
                     
-                    <!-- Link registrazione e password dimenticata -->
                     <div class="text-center mt-4">
                         <p class="text-muted">
                             Non hai un account? 
@@ -107,7 +97,6 @@
 </div>
 
 <script>
-// Funzione per mostrare/nascondere password
 function togglePassword(fieldId) {
     const field = document.getElementById(fieldId);
     const eye = document.getElementById(fieldId + '-eye');
@@ -123,7 +112,6 @@ function togglePassword(fieldId) {
     }
 }
 
-// Mostra alert per admin
 document.addEventListener('DOMContentLoaded', function() {
     const emailField = document.getElementById('email');
     const adminAlert = document.getElementById('adminAlert');
@@ -143,11 +131,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Previeni doppi submit
     document.getElementById('loginForm').addEventListener('submit', function() {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Accedendo...';
     });
 });
 </script>
-{% endblock %>
+{% endblock %}
