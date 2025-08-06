@@ -35,16 +35,16 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = int(os.environ.get('SESSION_TIMEOUT', '3600'))
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
-TABLE_NAME_USERS = 'users'
-TABLE_NAME_RESULTS = 'testresults'
+
 # Configurazione GitHub
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = os.environ.get('GITHUB_REPO')
 GITHUB_BRANCH = os.environ.get('GITHUB_BRANCH', 'main')
 PROGRESS_FILE = 'data/user_progress.json'
 LOCAL_PROGRESS_FILE = 'user_progress.json'
-
+AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+TABLE_NAME_USERS = 'users'
+TABLE_NAME_RESULTS = 'testresults'
 # Cache in memoria per ridurre chiamate a GitHub -
 _data_cache = None
 _cache_timestamp = None
@@ -285,7 +285,43 @@ def save_to_github_async(data):
     
     logger.error("Fallimento salvataggio GitHub dopo tutti i tentativi")
     return False
+def get_table_service():
+    """Ottiene il client per Azure Table Storage"""
+    if not AZURE_STORAGE_CONNECTION_STRING:
+        logger.warning("Azure Storage non configurato, uso file locale")
+        return None
+    
+    try:
+        return TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    except Exception as e:
+        logger.error(f"Errore connessione Azure Storage: {e}")
+        return None
 
+def initialize_azure_tables():
+    """Crea le tabelle se non esistono"""
+    service = get_table_service()
+    if not service:
+        return False
+    
+    try:
+        # Crea tabella users
+        try:
+            service.create_table(TABLE_NAME_USERS)
+            logger.info(f"Tabella {TABLE_NAME_USERS} creata")
+        except:
+            pass  # Tabella già esistente
+        
+        # Crea tabella results
+        try:
+            service.create_table(TABLE_NAME_RESULTS)
+            logger.info(f"Tabella {TABLE_NAME_RESULTS} creata")
+        except:
+            pass  # Tabella già esistente
+        
+        return True
+    except Exception as e:
+        logger.error(f"Errore inizializzazione tabelle: {e}")
+        return False
 # Funzioni helper
 def get_user_data(email):
     """Recupera dati utente da Azure o locale"""
@@ -317,6 +353,32 @@ def get_user_data(email):
     return data["users"].get(email, {})
 
 def save_user_data(email, user_info):
+    """Salva dati utente sia su Azure che localmente"""
+    # Prima prova Azure
+    service = get_table_service()
+    if service:
+        try:
+            table_client = service.get_table_client(TABLE_NAME_USERS)
+            
+            entity = {
+                'PartitionKey': user_info.get('azienda', 'default'),
+                'RowKey': email,
+                'email': email,
+                'nome': user_info.get('nome', ''),
+                'cognome': user_info.get('cognome', ''),
+                'azienda': user_info.get('azienda', ''),
+                'is_admin': user_info.get('is_admin', False),
+                'created_at': user_info.get('created_at', ''),
+                'last_login': user_info.get('last_login', ''),
+                'password_hash': user_info.get('password_hash', '')
+            }
+            
+            table_client.upsert_entity(entity)
+            logger.info(f"Utente {email} salvato in Azure Table")
+        except Exception as e:
+            logger.error(f"Errore salvataggio Azure: {e}")
+    
+    # Salva anche localmente come backup
     data = load_progress_data()
     data["users"][email] = user_info
     success = save_progress_data(data)
@@ -522,78 +584,6 @@ def authenticate_user(email, password):
         return True, user_data
     else:
         return False, "Password errata"
-
-def get_table_service():
-    """Ottiene il client per Azure Table Storage"""
-    if not AZURE_STORAGE_CONNECTION_STRING:
-        logger.warning("Azure Storage non configurato, uso file locale")
-        return None
-    
-    try:
-        return TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-    except Exception as e:
-        logger.error(f"Errore connessione Azure Storage: {e}")
-        return None
-
-def initialize_azure_tables():
-    """Crea le tabelle se non esistono"""
-    service = get_table_service()
-    if not service:
-        return False
-    
-    try:
-        # Crea tabella users
-        try:
-            service.create_table(TABLE_NAME_USERS)
-            logger.info(f"Tabella {TABLE_NAME_USERS} creata")
-        except:
-            pass  # Tabella già esistente
-        
-        # Crea tabella results
-        try:
-            service.create_table(TABLE_NAME_RESULTS)
-            logger.info(f"Tabella {TABLE_NAME_RESULTS} creata")
-        except:
-            pass  # Tabella già esistente
-        
-        return True
-    except Exception as e:
-        logger.error(f"Errore inizializzazione tabelle: {e}")
-        return False
-
-# 4. MODIFICA LA FUNZIONE save_user_data ESISTENTE
-def save_user_data(email, user_info):
-    """Salva dati utente sia su Azure che localmente"""
-    # Prima prova Azure
-    service = get_table_service()
-    if service:
-        try:
-            table_client = service.get_table_client(TABLE_NAME_USERS)
-            
-            entity = {
-                'PartitionKey': user_info.get('azienda', 'default'),
-                'RowKey': email,
-                'email': email,
-                'nome': user_info.get('nome', ''),
-                'cognome': user_info.get('cognome', ''),
-                'azienda': user_info.get('azienda', ''),
-                'is_admin': user_info.get('is_admin', False),
-                'created_at': user_info.get('created_at', ''),
-                'last_login': user_info.get('last_login', ''),
-                'password_hash': user_info.get('password_hash', '')
-            }
-            
-            table_client.upsert_entity(entity)
-            logger.info(f"Utente {email} salvato in Azure Table")
-        except Exception as e:
-            logger.error(f"Errore salvataggio Azure: {e}")
-    
-    # Salva anche localmente come backup
-    data = load_progress_data()
-    data["users"][email] = user_info
-    success = save_progress_data(data)
-    if not success:
-        logger.error(f"Fallimento salvataggio dati utente: {email}")
         
 # Error handlers per Azure
 @app.errorhandler(404)
