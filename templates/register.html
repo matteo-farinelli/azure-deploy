@@ -1,4 +1,3 @@
-<!-- templates/register.html -->
 {% extends "base.html" %}
 
 {% block title %}Registrazione - Assessment App{% endblock %}
@@ -11,22 +10,20 @@
                 <div class="card-body p-5">
                     <div class="text-center mb-4">
                         <h2>Registrazione</h2>
-                        <p class="text-muted">Crea il tuo account</p>
+                        <p class="text-muted">Crea il tuo account aziendale</p>
                     </div>
                     
-                    <!-- Messaggi di errore -->
                     {% if error %}
                         <div class="alert alert-danger" role="alert">
                             <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
                         </div>
                     {% endif %}
                     
-                    <!-- Form di registrazione -->
                     <form method="POST" id="registerForm">
                         <!-- Email -->
                         <div class="mb-3">
                             <label for="email" class="form-label">
-                                <i class="fas fa-envelope me-2"></i>Email Aziendale
+                                <i class="fas fa-envelope me-2"></i>Email aziendale
                             </label>
                             <input type="email" 
                                    class="form-control" 
@@ -36,8 +33,7 @@
                                    value="{{ request.form.email if error else '' }}"
                                    required>
                             <div class="form-text">
-                                Usa il formato: nome.cognome@auxiell.com, @euxilia.com o @xva-services.com<br>
-                                Per admin: admin@azienda.com
+                                Usa la tua email aziendale (@auxiell.com, @euxilia.com o @xva-services.com)
                             </div>
                         </div>
                         
@@ -51,7 +47,7 @@
                                        class="form-control" 
                                        id="password" 
                                        name="password" 
-                                       placeholder="Inserisci la password"
+                                       placeholder="Crea una password sicura"
                                        required>
                                 <button class="btn btn-outline-secondary" 
                                         type="button" 
@@ -59,37 +55,42 @@
                                     <i class="fas fa-eye" id="password-eye"></i>
                                 </button>
                             </div>
-                            <div class="form-text" id="passwordHelp">
+                            <div class="form-text">
                                 Minimo 6 caratteri
                             </div>
                         </div>
                         
                         <!-- Conferma Password -->
-                        <div class="mb-4">
-                            <label for="confirm_password" class="form-label">
-                                <i class="fas fa-lock me-2"></i>Conferma Password
+                        <div class="mb-3">
+                            <label for="password_confirm" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Conferma password
                             </label>
                             <div class="input-group">
                                 <input type="password" 
                                        class="form-control" 
-                                       id="confirm_password" 
-                                       name="confirm_password" 
+                                       id="password_confirm" 
+                                       name="password_confirm" 
                                        placeholder="Ripeti la password"
                                        required>
                                 <button class="btn btn-outline-secondary" 
                                         type="button" 
-                                        onclick="togglePassword('confirm_password')">
-                                    <i class="fas fa-eye" id="confirm_password-eye"></i>
+                                        onclick="togglePassword('password_confirm')">
+                                    <i class="fas fa-eye" id="password_confirm-eye"></i>
                                 </button>
                             </div>
-                            <div id="passwordMatch" class="form-text"></div>
                         </div>
                         
-                        <!-- Alert per admin -->
-                        <div id="adminAlert" class="alert alert-info d-none">
-                            <i class="fas fa-shield-alt me-2"></i>
-                            <strong>Account Amministratore:</strong> Stai registrando un account admin. 
-                            La password sarà sostituita con quella standard del sistema.
+                        <!-- Info automatiche -->
+                        <div id="userInfo" class="alert alert-info d-none">
+                            <small>
+                                <i class="fas fa-info-circle me-2"></i>
+                                I tuoi dati saranno estratti automaticamente dall'email:
+                                <ul class="mb-0 mt-2">
+                                    <li>Nome: <strong id="infoNome">-</strong></li>
+                                    <li>Cognome: <strong id="infoCognome">-</strong></li>
+                                    <li>Azienda: <strong id="infoAzienda">-</strong></li>
+                                </ul>
+                            </small>
                         </div>
                         
                         <!-- Pulsante registrazione -->
@@ -100,12 +101,12 @@
                         </div>
                     </form>
                     
-                    <!-- Link al login -->
+                    <!-- Link login -->
                     <div class="text-center mt-4">
                         <p class="text-muted">
                             Hai già un account? 
                             <a href="{{ url_for('login') }}" class="text-decoration-none">
-                                Effettua il login
+                                Accedi qui
                             </a>
                         </p>
                     </div>
@@ -132,76 +133,67 @@ function togglePassword(fieldId) {
     }
 }
 
-// Validazione in tempo reale
+// Estrai info dall'email
 document.addEventListener('DOMContentLoaded', function() {
     const emailField = document.getElementById('email');
-    const passwordField = document.getElementById('password');
-    const confirmPasswordField = document.getElementById('confirm_password');
-    const passwordMatch = document.getElementById('passwordMatch');
-    const adminAlert = document.getElementById('adminAlert');
-    const passwordHelp = document.getElementById('passwordHelp');
+    const userInfo = document.getElementById('userInfo');
     const submitBtn = document.getElementById('submitBtn');
+    const passwordField = document.getElementById('password');
+    const passwordConfirmField = document.getElementById('password_confirm');
     
-    // Controlla se è admin email
     emailField.addEventListener('input', function() {
         const email = this.value.toLowerCase();
-        const isAdmin = email.startsWith('admin@') && 
-                       (email.includes('auxiell.com') || 
-                        email.includes('euxilia.com') || 
-                        email.includes('xva-services.com'));
         
-        if (isAdmin) {
-            adminAlert.classList.remove('d-none');
-            passwordHelp.innerHTML = '<i class="fas fa-info-circle me-1"></i>Per admin viene usata la password standard del sistema';
+        // Valida formato email aziendale
+        const validPattern = /^[a-zA-Z]+\.[a-zA-Z]+@(auxiell|euxilia|xva-services)\.com$/;
+        
+        if (validPattern.test(email)) {
+            // Estrai informazioni
+            const parts = email.split('@');
+            const nameParts = parts[0].split('.');
+            const domain = parts[1];
+            
+            document.getElementById('infoNome').textContent = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+            document.getElementById('infoCognome').textContent = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
+            
+            let azienda = '';
+            if (domain === 'auxiell.com') azienda = 'Auxiell';
+            else if (domain === 'euxilia.com') azienda = 'Euxilia';
+            else if (domain === 'xva-services.com') azienda = 'XVA Services';
+            
+            document.getElementById('infoAzienda').textContent = azienda;
+            
+            userInfo.classList.remove('d-none');
         } else {
-            adminAlert.classList.add('d-none');
-            passwordHelp.innerHTML = 'Minimo 6 caratteri';
+            userInfo.classList.add('d-none');
         }
     });
     
-    // Verifica corrispondenza password
-    function checkPasswordMatch() {
+    // Validazione password in tempo reale
+    function validatePasswords() {
         const password = passwordField.value;
-        const confirmPassword = confirmPasswordField.value;
+        const confirm = passwordConfirmField.value;
         
-        if (confirmPassword === '') {
-            passwordMatch.innerHTML = '';
-            passwordMatch.className = 'form-text';
-            return;
-        }
-        
-        if (password === confirmPassword) {
-            passwordMatch.innerHTML = '<i class="fas fa-check text-success me-1"></i>Le password coincidono';
-            passwordMatch.className = 'form-text text-success';
+        if (confirm && password !== confirm) {
+            passwordConfirmField.setCustomValidity('Le password non coincidono');
         } else {
-            passwordMatch.innerHTML = '<i class="fas fa-times text-danger me-1"></i>Le password non coincidono';
-            passwordMatch.className = 'form-text text-danger';
+            passwordConfirmField.setCustomValidity('');
         }
     }
     
-    passwordField.addEventListener('input', checkPasswordMatch);
-    confirmPasswordField.addEventListener('input', checkPasswordMatch);
+    passwordField.addEventListener('input', validatePasswords);
+    passwordConfirmField.addEventListener('input', validatePasswords);
     
-    // Validazione form
+    // Previeni doppi submit
     document.getElementById('registerForm').addEventListener('submit', function(e) {
-        const password = passwordField.value;
-        const confirmPassword = confirmPasswordField.value;
-        
-        if (password !== confirmPassword) {
+        if (passwordField.value !== passwordConfirmField.value) {
             e.preventDefault();
             alert('Le password non coincidono!');
             return false;
         }
         
-        if (password.length < 6 && !emailField.value.toLowerCase().startsWith('admin@')) {
-            e.preventDefault();
-            alert('La password deve essere di almeno 6 caratteri!');
-            return false;
-        }
-        
-        // Disabilita il pulsante per evitare doppi submit
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registrando...';
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registrazione in corso...';
     });
 });
 </script>
