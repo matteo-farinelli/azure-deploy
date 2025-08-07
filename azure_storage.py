@@ -5,7 +5,6 @@ from datetime import datetime
 from azure.data.tables import TableServiceClient, TableEntity
 from azure.core.exceptions import ResourceNotFoundError, HttpResponseError
 import time
-import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +21,26 @@ def get_table_service_with_retry():
     """Ottiene il client Azure Table con retry e validazione"""
     if not AZURE_STORAGE_CONNECTION_STRING:
         logger.error("❌ AZURE_STORAGE_CONNECTION_STRING non configurata!")
-        raise Exception("Azure Storage non configurato. Impossibile continuare senza persistenza.")
+        raise Exception("Azure Storage non configurato")
     
     for attempt in range(MAX_RETRIES):
         try:
             service = TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
             
-            # Test connessione
-            list(service.list_tables())
-            logger.info(f"✅ Connessione Azure Table Storage OK (tentativo {attempt + 1})")
+            # Test connessione semplice
+            tables = list(service.list_tables())
+            logger.info(f"✅ Azure connesso (tentativo {attempt + 1})")
             return service
             
         except Exception as e:
-            logger.error(f"❌ Tentativo {attempt + 1} connessione Azure fallito: {e}")
+            logger.error(f"❌ Tentativo {attempt + 1} fallito: {str(e)}")
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
             else:
-                raise Exception(f"Impossibile connettersi ad Azure Table Storage dopo {MAX_RETRIES} tentativi: {e}")
+                raise Exception(f"Connessione Azure fallita dopo {MAX_RETRIES} tentativi: {str(e)}")
 
 def initialize_azure_tables_mandatory():
-    """Crea le tabelle OBBLIGATORIAMENTE - fallisce se non riesce"""
+    """Crea le tabelle OBBLIGATORIAMENTE"""
     try:
         service = get_table_service_with_retry()
         
@@ -67,32 +66,15 @@ def initialize_azure_tables_mandatory():
                 logger.error(f"❌ Errore creazione tabella {TABLE_NAME_RESULTS}: {e}")
                 raise
         
-        # Test scrittura/lettura
-        test_entity = {
-            'PartitionKey': 'test',
-            'RowKey': f'test_{datetime.now().timestamp()}',
-            'test_field': 'test_value',
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        table_client = service.get_table_client(TABLE_NAME_USERS)
-        table_client.upsert_entity(test_entity)
-        
-        # Verifica lettura
-        entity = table_client.get_entity('test', test_entity['RowKey'])
-        
-        # Pulisci test
-        table_client.delete_entity('test', test_entity['RowKey'])
-        
-        logger.info("✅ Azure Tables inizializzate e testate con successo")
+        logger.info("✅ Azure Tables inizializzate")
         return True
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile inizializzare Azure Tables: {e}")
-        raise Exception(f"Azure Tables non disponibili: {e}")
+        logger.error(f"❌ ERRORE CRITICO inizializzazione tabelle: {e}")
+        raise Exception(f"Inizializzazione Azure fallita: {e}")
 
 def save_user_data_azure_only(email, user_info):
-    """Salva dati utente SOLO su Azure - NO fallback file"""
+    """Salva dati utente SOLO su Azure - NO fallback"""
     try:
         service = get_table_service_with_retry()
         table_client = service.get_table_client(TABLE_NAME_USERS)
@@ -101,36 +83,37 @@ def save_user_data_azure_only(email, user_info):
             'PartitionKey': user_info.get('azienda', 'default'),
             'RowKey': email,
             'email': email,
-            'nome': user_info.get('nome', ''),
-            'cognome': user_info.get('cognome', ''),
-            'azienda': user_info.get('azienda', ''),
-            'is_admin': user_info.get('is_admin', False),
-            'created_at': user_info.get('created_at', ''),
-            'last_login': user_info.get('last_login', ''),
-            'password_hash': user_info.get('password_hash', ''),
+            'nome': str(user_info.get('nome', '')),
+            'cognome': str(user_info.get('cognome', '')),
+            'azienda': str(user_info.get('azienda', '')),
+            'is_admin': bool(user_info.get('is_admin', False)),
+            'created_at': str(user_info.get('created_at', '')),
+            'last_login': str(user_info.get('last_login', '') if user_info.get('last_login') else ''),
+            'password_hash': str(user_info.get('password_hash', '')),
             'updated_at': datetime.now().isoformat()
         }
         
         table_client.upsert_entity(entity)
-        logger.info(f"✅ Utente {email} salvato su Azure Table")
+        logger.info(f"✅ Utente {email} salvato su Azure")
         return True
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile salvare utente {email}: {e}")
-        raise Exception(f"Salvataggio utente fallito: {e}")
+        logger.error(f"❌ ERRORE salvataggio utente {email}: {e}")
+        raise Exception(f"Salvataggio fallito: {e}")
 
 def get_user_data_azure_only(email):
-    """Recupera dati utente SOLO da Azure - NO fallback file"""
+    """Recupera dati utente SOLO da Azure - NO fallback"""
     try:
         service = get_table_service_with_retry()
         table_client = service.get_table_client(TABLE_NAME_USERS)
         
         # Cerca in tutte le partizioni
-        users = list(table_client.query_entities(f"RowKey eq '{email}'"))
+        query = f"RowKey eq '{email}'"
+        users = list(table_client.query_entities(query))
         
         if users:
             user = users[0]
-            logger.info(f"✅ Utente {email} trovato su Azure Table")
+            logger.info(f"✅ Utente {email} trovato")
             return {
                 'email': user['email'],
                 'nome': user.get('nome', ''),
@@ -146,47 +129,48 @@ def get_user_data_azure_only(email):
             return None
             
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile recuperare utente {email}: {e}")
+        logger.error(f"❌ ERRORE recupero utente {email}: {e}")
         raise Exception(f"Recupero utente fallito: {e}")
 
 def save_test_result_azure_only(result):
-    """Salva risultato test SOLO su Azure - NO fallback file"""
+    """Salva risultato test SOLO su Azure - NO fallback"""
     try:
         service = get_table_service_with_retry()
         table_client = service.get_table_client(TABLE_NAME_RESULTS)
         
-        # Genera ID univoco e sicuro
+        # Genera ID univoco
         timestamp = str(int(datetime.now().timestamp() * 1000))
         result_id = f"{result['user_email']}_{timestamp}"
         
         entity = {
             'PartitionKey': result.get('azienda', 'default'),
             'RowKey': result_id,
-            'user_email': result['user_email'],
-            'test_name': result['test_name'],
-            'score': int(result['score']),
-            'correct_answers': int(result['correct_answers']),
-            'total_questions': int(result['total_questions']),
-            'completed_at': result.get('completed_at', datetime.now().isoformat()),
-            'answers_json': result['answers_json'],
+            'user_email': str(result['user_email']),
+            'test_name': str(result['test_name']),
+            'score': int(result.get('score', 0)),
+            'correct_answers': int(result.get('correct_answers', 0)),
+            'total_questions': int(result.get('total_questions', 0)),
+            'completed_at': str(result.get('completed_at', datetime.now().isoformat())),
+            'answers_json': str(result.get('answers_json', '[]')),
             'created_at': datetime.now().isoformat()
         }
         
         table_client.upsert_entity(entity)
-        logger.info(f"✅ Risultato test salvato su Azure Table per {result['user_email']}")
+        logger.info(f"✅ Test result salvato per {result['user_email']}")
         return True
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile salvare risultato test: {e}")
+        logger.error(f"❌ ERRORE salvataggio test result: {e}")
         raise Exception(f"Salvataggio risultato fallito: {e}")
 
 def get_user_test_results_azure_only(email):
-    """Recupera risultati test SOLO da Azure - NO fallback file"""
+    """Recupera risultati test SOLO da Azure - NO fallback"""
     try:
         service = get_table_service_with_retry()
         table_client = service.get_table_client(TABLE_NAME_RESULTS)
         
-        results = list(table_client.query_entities(f"user_email eq '{email}'"))
+        query = f"user_email eq '{email}'"
+        results = list(table_client.query_entities(query))
         
         test_results = []
         for result in results:
@@ -201,14 +185,14 @@ def get_user_test_results_azure_only(email):
                 'answers_json': result.get('answers_json', '[]')
             })
         
-        # Ordina per data completamento
+        # Ordina per data
         test_results.sort(key=lambda x: x.get("completed_at", ""), reverse=True)
         logger.info(f"✅ Recuperati {len(test_results)} risultati per {email}")
         
         return test_results
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile recuperare risultati per {email}: {e}")
+        logger.error(f"❌ ERRORE recupero risultati per {email}: {e}")
         raise Exception(f"Recupero risultati fallito: {e}")
 
 def get_all_users_azure_only():
@@ -237,7 +221,7 @@ def get_all_users_azure_only():
         return users_dict
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile recuperare utenti: {e}")
+        logger.error(f"❌ ERRORE recupero utenti: {e}")
         raise Exception(f"Recupero utenti fallito: {e}")
 
 def get_all_test_results_azure_only():
@@ -268,13 +252,13 @@ def get_all_test_results_azure_only():
         return test_results
         
     except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO: Impossibile recuperare risultati: {e}")
+        logger.error(f"❌ ERRORE recupero risultati: {e}")
         raise Exception(f"Recupero risultati fallito: {e}")
 
 def migrate_from_files_to_azure():
-    """Migra dati esistenti dai file ad Azure (run once)"""
+    """Migra dati esistenti dai file ad Azure"""
     try:
-        logger.info("🔄 Avvio migrazione da file a Azure...")
+        logger.info("🔄 Controllo migrazione da file...")
         
         # Controlla se esiste file locale
         local_file = 'user_progress.json'
@@ -289,7 +273,7 @@ def migrate_from_files_to_azure():
         users = data.get('users', {})
         test_results = data.get('test_results', [])
         
-        logger.info(f"📁 Trovati {len(users)} utenti e {len(test_results)} risultati nel file locale")
+        logger.info(f"📁 Migrazione: {len(users)} utenti, {len(test_results)} risultati")
         
         # Migra utenti
         migrated_users = 0
@@ -298,7 +282,7 @@ def migrate_from_files_to_azure():
                 save_user_data_azure_only(email, user_data)
                 migrated_users += 1
             except Exception as e:
-                logger.error(f"❌ Errore migrazione utente {email}: {e}")
+                logger.warning(f"⚠️ Errore migrazione utente {email}: {e}")
         
         # Migra risultati
         migrated_results = 0
@@ -309,24 +293,23 @@ def migrate_from_files_to_azure():
                 save_test_result_azure_only(result)
                 migrated_results += 1
             except Exception as e:
-                logger.error(f"❌ Errore migrazione risultato: {e}")
+                logger.warning(f"⚠️ Errore migrazione risultato: {e}")
         
-        logger.info(f"✅ Migrazione completata: {migrated_users} utenti, {migrated_results} risultati")
+        logger.info(f"✅ Migrazione: {migrated_users} utenti, {migrated_results} risultati")
         
         # Backup del file originale
         backup_file = f"{local_file}.backup_{int(datetime.now().timestamp())}"
         os.rename(local_file, backup_file)
-        logger.info(f"📦 File originale salvato come backup: {backup_file}")
+        logger.info(f"📦 Backup creato: {backup_file}")
         
         return True
         
     except Exception as e:
-        logger.error(f"❌ Errore durante la migrazione: {e}")
+        logger.error(f"❌ Errore migrazione: {e}")
         return False
 
-# Funzione di health check specifica per Azure Tables
 def azure_tables_health_check():
-    """Verifica stato delle Azure Tables"""
+    """Verifica stato Azure Tables"""
     try:
         service = get_table_service_with_retry()
         
@@ -337,7 +320,7 @@ def azure_tables_health_check():
         users_exists = TABLE_NAME_USERS in table_names
         results_exists = TABLE_NAME_RESULTS in table_names
         
-        # Conta records se tabelle esistono
+        # Conta records
         users_count = 0
         results_count = 0
         
