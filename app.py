@@ -318,12 +318,73 @@ def login():
     return render_template('login.html',
                           azienda='auxiell',
                           company_color='#6C757D')
-    
-@app.route('/ultra-test')
-def ultra_test():
-    """Test più semplice possibile"""
-    return "FUNZIONA!"
-
+        
+@app.route('/debug/test-register')
+def debug_test_register():
+    """Test registrazione step by step"""
+    try:
+        # Test 1: Azure connection
+        logger.info("=== DEBUG REGISTRAZIONE ===")
+        
+        # Test connessione Azure
+        from azure_storage import get_table_service_with_retry, save_user_data_azure_only
+        
+        service = get_table_service_with_retry()
+        logger.info("✅ Connessione Azure OK")
+        
+        # Test 2: Creazione utente di test
+        email_test = "test.debug@auxiell.com"
+        user_data_test = {
+            'email': email_test,
+            'password_hash': 'test_hash',
+            'nome': 'Test',
+            'cognome': 'Debug',
+            'azienda': 'auxiell',
+            'is_admin': False,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None
+        }
+        
+        logger.info("📝 Tentativo salvataggio utente test...")
+        success = save_user_data_azure_only(email_test, user_data_test)
+        
+        if success:
+            logger.info("✅ Utente test salvato!")
+            
+            # Test 3: Recupero utente
+            from azure_storage import get_user_data_azure_only
+            recovered = get_user_data_azure_only(email_test)
+            
+            if recovered:
+                logger.info("✅ Utente test recuperato!")
+                return jsonify({
+                    "status": "success",
+                    "message": "Test registrazione completato",
+                    "user_saved": True,
+                    "user_recovered": True,
+                    "user_data": recovered
+                })
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": "Utente salvato ma non recuperato",
+                    "user_saved": True,
+                    "user_recovered": False
+                })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Impossibile salvare utente test",
+                "user_saved": False
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Debug registrazione fallito: {e}")
+        return jsonify({
+            "status": "error", 
+            "error": str(e),
+            "message": "Errore durante test registrazione"
+        }), 500
 @app.route('/test-error')  
 def test_error():
     """Forza un errore per vedere error handler"""
@@ -336,8 +397,11 @@ def register():
         password = request.form.get('password', '').strip()
         password_confirm = request.form.get('password_confirm', '').strip()
         
+        logger.info(f"📝 Tentativo registrazione: {email}")
+        
         # Validazione email
         if not validate_email(email):
+            logger.warning(f"❌ Email non valida: {email}")
             return render_template('register.html', 
                                  error='Email non valida. Usa il formato nome.cognome@azienda.com',
                                  azienda='auxiell',
@@ -345,23 +409,29 @@ def register():
         
         # Non permettere admin
         if email.startswith('admin@'):
+            logger.warning(f"❌ Tentativo registrazione admin: {email}")
             return render_template('register.html', 
                                  error='Non puoi registrare un account admin',
                                  azienda='auxiell',
                                  company_color='#6C757D')
         
         try:
+            logger.info(f"🔍 Verifica utente esistente: {email}")
             # Verifica se l'utente esiste già (SU AZURE)
             existing_user = get_user_data(email)
             if existing_user:
+                logger.warning(f"❌ Utente già esistente: {email}")
                 return render_template('register.html', 
                                      error='Email già registrata. Usa il login.',
                                      azienda='auxiell',
                                      company_color='#6C757D')
+                                     
+            logger.info(f"✅ Utente non esistente, procedo con registrazione: {email}")
+            
         except Exception as e:
-            logger.error(f"❌ Errore verifica utente esistente: {e}")
+            logger.error(f"❌ Errore verifica utente esistente {email}: {e}")
             return render_template('register.html', 
-                                 error='Errore server. Riprova.',
+                                 error=f'Errore verifica utente: {str(e)}',  # ← MOSTRA ERRORE SPECIFICO
                                  azienda='auxiell',
                                  company_color='#6C757D')
         
@@ -386,6 +456,7 @@ def register():
                                  company_color='#6C757D')
         
         try:
+            logger.info(f"📝 Creazione dati utente: {email}")
             # Crea nuovo utente (SU AZURE)
             nome, cognome = extract_name_from_email(email)
             azienda = extract_company_from_email(email)
@@ -401,18 +472,26 @@ def register():
                 'last_login': None
             }
             
-            save_user_data(email, user_data)
+            logger.info(f"💾 Salvataggio su Azure: {email}")
+            success = save_user_data(email, user_data)
             
-            logger.info(f"✅ Nuovo utente registrato su Azure: {email}")
-            return render_template('login.html', 
-                                 success='Registrazione completata! Ora puoi accedere.',
-                                 azienda='auxiell',
-                                 company_color='#6C757D')
+            if success:
+                logger.info(f"✅ Nuovo utente registrato su Azure: {email}")
+                return render_template('login.html', 
+                                     success='Registrazione completata! Ora puoi accedere.',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
+            else:
+                logger.error(f"❌ Salvataggio fallito per: {email}")
+                return render_template('register.html', 
+                                     error='Errore salvataggio su database.',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
                 
         except Exception as e:
-            logger.error(f"❌ Errore registrazione: {e}")
+            logger.error(f"❌ Errore registrazione completo {email}: {e}")
             return render_template('register.html', 
-                                 error='Errore durante la registrazione. Riprova.',
+                                 error=f'Errore registrazione: {str(e)}',  # ← MOSTRA ERRORE SPECIFICO  
                                  azienda='auxiell',
                                  company_color='#6C757D')
     
