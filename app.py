@@ -163,7 +163,6 @@ def get_admin_password():
     return os.environ.get('ADMIN_PASSWORD', 'assessment25')
 
 def validate_password(password):
-    """Valida la password (versione semplificata per ora)"""
     if len(password) < 6:
         return False, "La password deve essere di almeno 6 caratteri"
     return True, ""
@@ -246,7 +245,18 @@ def index():
     if session.get('logged_in'):
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
-
+@app.route('/hash-password/<password>')
+def hash_password_route(password):
+    """Genera hash per password - RIMUOVERE DOPO L'USO"""
+    hashed = hash_password(password)
+    return f"""
+    <h2>Password Hash Generator</h2>
+    <p><strong>Password:</strong> {password}</p>
+    <p><strong>Hash SHA-256:</strong> {hashed}</p>
+    <p>Copia questo hash nella tabella Azure</p>
+    <hr>
+    <p><small>⚠️ Rimuovi questa route dopo l'uso per sicurezza!</small></p>
+    """
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
