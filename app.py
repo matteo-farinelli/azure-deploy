@@ -18,6 +18,7 @@ import time
 import hashlib
 from azure.data.tables import TableServiceClient, TableEntity
 from azure.core.exceptions import ResourceNotFoundError
+from azure_storage import *
 
 # Configurazione logging per Azure 
 logging.basicConfig(
@@ -173,31 +174,21 @@ def initialize_storage():
         }
 
 def load_progress_data():
-    """Carica progressi con cache e fallback sicuro"""
+    """Carica tutti i dati da Azure Tables"""
     try:
-        # Prima controlla la cache
-        cached = get_cached_data()
-        if cached:
-            return cached
+        users = get_all_users_azure_only()
+        test_results = get_all_test_results_azure_only()
         
-        # Poi controlla file locale
-        if os.path.exists(LOCAL_PROGRESS_FILE):
-            with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                set_cached_data(data)  # Aggiorna cache
-                return data
+        return {
+            "users": users,
+            "test_results": test_results,
+            "last_updated": datetime.now().isoformat(),
+            "source": "azure_tables"
+        }
     except Exception as e:
-        logger.error(f"Errore caricamento file locale: {e}")
-    
-    # Fallback: dati vuoti
-    fallback_data = {
-        "users": {},
-        "test_results": [],
-        "last_updated": datetime.now().isoformat(),
-        "fallback_mode": True
-    }
-    return fallback_data
-
+        logger.error(f"❌ ERRORE CRITICO load_progress_data: {e}")
+        raise Exception(f"Impossibile caricare dati: {e}")
+        
 def is_admin_user(email):
     """Verifica se l'utente è admin"""
     admin_emails = [
@@ -324,145 +315,25 @@ def initialize_azure_tables():
         return False
 # Funzioni helper
 def get_user_data(email):
-    """Recupera dati utente da Azure o locale"""
-    # Prima prova Azure
-    service = get_table_service()
-    if service:
-        try:
-            table_client = service.get_table_client(TABLE_NAME_USERS)
-            
-            # Cerca in tutte le partizioni
-            users = table_client.query_entities(f"RowKey eq '{email}'")
-            
-            for user in users:
-                return {
-                    'email': user['email'],
-                    'nome': user.get('nome', ''),
-                    'cognome': user.get('cognome', ''),
-                    'azienda': user.get('azienda', ''),
-                    'is_admin': user.get('is_admin', False),
-                    'created_at': user.get('created_at', ''),
-                    'last_login': user.get('last_login', ''),
-                    'password_hash': user.get('password_hash', '')
-                }
-        except Exception as e:
-            logger.error(f"Errore recupero da Azure: {e}")
-    
-    # Fallback su locale
-    data = load_progress_data()
-    return data["users"].get(email, {})
+    """Recupera dati utente SOLO da Azure Table Storage"""
+    return get_user_data_azure_only(email)
 
 def save_user_data(email, user_info):
-    """Salva dati utente sia su Azure che localmente"""
-    # Prima prova Azure
-    service = get_table_service()
-    if service:
-        try:
-            table_client = service.get_table_client(TABLE_NAME_USERS)
-            
-            entity = {
-                'PartitionKey': user_info.get('azienda', 'default'),
-                'RowKey': email,
-                'email': email,
-                'nome': user_info.get('nome', ''),
-                'cognome': user_info.get('cognome', ''),
-                'azienda': user_info.get('azienda', ''),
-                'is_admin': user_info.get('is_admin', False),
-                'created_at': user_info.get('created_at', ''),
-                'last_login': user_info.get('last_login', ''),
-                'password_hash': user_info.get('password_hash', '')
-            }
-            
-            table_client.upsert_entity(entity)
-            logger.info(f"Utente {email} salvato in Azure Table")
-        except Exception as e:
-            logger.error(f"Errore salvataggio Azure: {e}")
+    """Salva dati utente SOLO su Azure Table Storage"""
+    return save_user_data_azure_only(email, user_info)
     
-    # Salva anche localmente come backup
-    data = load_progress_data()
-    data["users"][email] = user_info
-    success = save_progress_data(data)
-    if not success:
-        logger.error(f"Fallimento salvataggio dati utente: {email}")
-
 def get_user_test_results(email):
-    """Recupera risultati test da Azure o locale"""
-    # Prima prova Azure
-    service = get_table_service()
-    if service:
-        try:
-            table_client = service.get_table_client(TABLE_NAME_RESULTS)
-            
-            results = table_client.query_entities(f"user_email eq '{email}'")
-            
-            test_results = []
-            for result in results:
-                test_results.append({
-                    'user_email': result['user_email'],
-                    'test_name': result['test_name'],
-                    'azienda': result.get('PartitionKey', ''),
-                    'score': result.get('score', 0),
-                    'correct_answers': result.get('correct_answers', 0),
-                    'total_questions': result.get('total_questions', 0),
-                    'completed_at': result.get('completed_at', ''),
-                    'answers_json': result.get('answers_json', '[]')
-                })
-            
-            if test_results:
-                return sorted(test_results, key=lambda x: x.get("completed_at", ""), reverse=True)
-        except Exception as e:
-            logger.error(f"Errore recupero risultati Azure: {e}")
+    """Recupera risultati test SOLO da Azure Table Storage"""
+    return get_user_test_results_azure_only(email)
     
-    # Fallback su locale
-    data = load_progress_data()
-    user_results = []
-    for result in data["test_results"]:
-        if result.get("user_email") == email:
-            user_results.append(result)
-    return sorted(user_results, key=lambda x: x.get("completed_at", ""), reverse=True)
-
 def save_test_result(result):
-    """Salva risultato test sia su Azure che localmente"""
-    # Aggiungi timestamp e ID
-    result["id"] = len(load_progress_data()["test_results"]) + 1
-    result["completed_at"] = datetime.now().isoformat()
+    """Salva risultato test SOLO su Azure Table Storage"""
+    # Aggiungi timestamp se mancante
+    if not result.get('completed_at'):
+        result['completed_at'] = datetime.now().isoformat()
     
-    # Prima prova Azure
-    service = get_table_service()
-    if service:
-        try:
-            table_client = service.get_table_client(TABLE_NAME_RESULTS)
-            
-            # Genera ID univoco per Azure
-            result_id = f"{result['user_email']}_{datetime.now().timestamp()}"
-            
-            entity = {
-                'PartitionKey': result.get('azienda', 'default'),
-                'RowKey': result_id,
-                'user_email': result['user_email'],
-                'test_name': result['test_name'],
-                'score': result['score'],
-                'correct_answers': result['correct_answers'],
-                'total_questions': result['total_questions'],
-                'completed_at': result['completed_at'],
-                'answers_json': result['answers_json']
-            }
-            
-            table_client.upsert_entity(entity)
-            logger.info(f"Risultato test salvato in Azure Table")
-        except Exception as e:
-            logger.error(f"Errore salvataggio risultato Azure: {e}")
+    return save_test_result_azure_only(result)
     
-    # Salva anche localmente
-    data = load_progress_data()
-    data["test_results"].append(result)
-    success = save_progress_data(data)
-    if success:
-        logger.info(f"Test result saved for {result.get('user_email')}")
-    else:
-        logger.error(f"Failed to save test result for {result.get('user_email')}")
-
-
 def validate_email(email):
     """Valida email aziendale inclusi admin"""
     normal_pattern = r'^[a-zA-Z]+\.[a-zA-Z]+@(auxiell|euxilia|xva-services)\.com$'
@@ -628,18 +499,28 @@ def login():
                                  company_color='#6C757D')
         
         try:
-            # Autentica l'utente
-            is_authenticated, result = authenticate_user(email, password)
+            # Autentica l'utente (USA SOLO AZURE)
+            user_data = get_user_data(email)
             
-            if not is_authenticated:
+            if not user_data:
                 return render_template('login.html', 
-                                     error=result,
+                                     error='Utente non trovato',
                                      azienda='auxiell',
                                      company_color='#6C757D')
             
-            user_data = result
+            # Verifica password
+            if is_admin_user(email):
+                password_correct = password == get_admin_password()
+            else:
+                password_correct = verify_password(user_data.get('password_hash', ''), password)
             
-            # Aggiorna ultimo login
+            if not password_correct:
+                return render_template('login.html', 
+                                     error='Password errata',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
+            
+            # Aggiorna ultimo login (SU AZURE)
             user_data['last_login'] = datetime.now().isoformat()
             save_user_data(email, user_data)
             
@@ -651,25 +532,26 @@ def login():
             session['is_admin'] = user_data['is_admin']
             session.permanent = True
             
-            logger.info(f"✓ Login successful: {email} (Admin: {user_data['is_admin']})")
+            logger.info(f"✅ Login successful: {email} (Admin: {user_data['is_admin']})")
             
-            # Redirect diverso per admin
+            # Redirect
             if user_data['is_admin']:
                 return redirect(url_for('admin_dashboard'))
             else:
                 return redirect(url_for('dashboard'))
             
         except Exception as e:
-            logger.error(f"Errore login: {e}")
+            logger.error(f"❌ Errore login: {e}")
             return render_template('login.html', 
-                                 error='Errore durante il login. Riprova.',
+                                 error='Errore server. Verifica la connessione.',
                                  azienda='auxiell',
                                  company_color='#6C757D')
     
-    # GET request - template normale
+    # GET request
     return render_template('login.html',
                           azienda='auxiell',
                           company_color='#6C757D')
+    
 @app.route('/ultra-test')
 def ultra_test():
     """Test più semplice possibile"""
@@ -680,8 +562,6 @@ def test_error():
     """Forza un errore per vedere error handler"""
     raise Exception("Test errore intenzionale")
     
-# Sostituisci la route /register esistente con questa:
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -696,11 +576,25 @@ def register():
                                  azienda='auxiell',
                                  company_color='#6C757D')
         
-        # Verifica se l'utente esiste già
-        existing_user = get_user_data(email)
-        if existing_user:
+        # Non permettere admin
+        if email.startswith('admin@'):
             return render_template('register.html', 
-                                 error='Email già registrata. Usa il login.',
+                                 error='Non puoi registrare un account admin',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
+        
+        try:
+            # Verifica se l'utente esiste già (SU AZURE)
+            existing_user = get_user_data(email)
+            if existing_user:
+                return render_template('register.html', 
+                                     error='Email già registrata. Usa il login.',
+                                     azienda='auxiell',
+                                     company_color='#6C757D')
+        except Exception as e:
+            logger.error(f"❌ Errore verifica utente esistente: {e}")
+            return render_template('register.html', 
+                                 error='Errore server. Riprova.',
                                  azienda='auxiell',
                                  company_color='#6C757D')
         
@@ -724,35 +618,32 @@ def register():
                                  azienda='auxiell',
                                  company_color='#6C757D')
         
-        # Non permettere registrazione di account admin
-        if email.startswith('admin@'):
-            return render_template('register.html', 
-                                 error='Non puoi registrare un account admin',
-                                 azienda='auxiell',
-                                 company_color='#6C757D')
-        
         try:
-            # Estrai informazioni dall'email
+            # Crea nuovo utente (SU AZURE)
             nome, cognome = extract_name_from_email(email)
             azienda = extract_company_from_email(email)
             
-            # Crea nuovo utente
-            success = create_user(email, password, nome, cognome, azienda, is_admin=False)
+            user_data = {
+                'email': email,
+                'password_hash': hash_password(password),
+                'nome': nome,
+                'cognome': cognome,
+                'azienda': azienda,
+                'is_admin': False,
+                'created_at': datetime.now().isoformat(),
+                'last_login': None
+            }
             
-            if success:
-                logger.info(f"✓ Nuovo utente registrato: {email}")
-                return render_template('login.html', 
-                                     success='Registrazione completata! Ora puoi accedere.',
-                                     azienda='auxiell',
-                                     company_color='#6C757D')
-            else:
-                return render_template('register.html', 
-                                     error='Errore durante la registrazione. Riprova.',
-                                     azienda='auxiell',
-                                     company_color='#6C757D')
+            save_user_data(email, user_data)
+            
+            logger.info(f"✅ Nuovo utente registrato su Azure: {email}")
+            return render_template('login.html', 
+                                 success='Registrazione completata! Ora puoi accedere.',
+                                 azienda='auxiell',
+                                 company_color='#6C757D')
                 
         except Exception as e:
-            logger.error(f"Errore registrazione: {e}")
+            logger.error(f"❌ Errore registrazione: {e}")
             return render_template('register.html', 
                                  error='Errore durante la registrazione. Riprova.',
                                  azienda='auxiell',
@@ -762,6 +653,7 @@ def register():
     return render_template('register.html',
                           azienda='auxiell',
                           company_color='#6C757D')
+
 @app.route('/dashboard')
 @login_required 
 def dashboard():
@@ -915,47 +807,45 @@ def logout():
 def forgot_password():
     return render_template('forgot_password.html')
 
-# Health check migliorato per Azure
 @app.route('/health')
 def health_check():
     try:
-        data = load_progress_data()
-        github_status = "connected" if GITHUB_TOKEN and GITHUB_REPO else "not_configured"
-        
-        # Test Azure Storage
-        azure_status = "not_configured"
-        if AZURE_STORAGE_CONNECTION_STRING:
-            try:
-                service = get_table_service()
-                if service:
-                    # Prova a listare tabelle
-                    list(service.list_tables())
-                    azure_status = "connected"
-            except:
-                azure_status = "error"
-        
-        # Test connessione GitHub
-        if github_status == "connected":
-            try:
-                url = f"https://api.github.com/repos/{GITHUB_REPO}"
-                response = requests.get(url, timeout=3)
-                github_status = "healthy" if response.status_code == 200 else "unhealthy"
-            except:
-                github_status = "unreachable"
+        # Health check completo per Azure
+        azure_health = azure_tables_health_check()
         
         return jsonify({
-            'status': 'healthy',
-            'users_count': len(data.get('users', {})),
-            'results_count': len(data.get('test_results', [])),
-            'github_status': github_status,
-            'azure_storage_status': azure_status,  # NUOVO!
-            'local_file_exists': os.path.exists(LOCAL_PROGRESS_FILE),
-            'cache_active': _data_cache is not None,
+            'status': azure_health['status'],
+            'azure_tables': azure_health,
+            'users_count': azure_health['record_counts']['users'],
+            'results_count': azure_health['record_counts']['results'],
+            'github_status': 'disabled',  # Non più usato per storage
             'timestamp': datetime.now().isoformat(),
-            'azure_environment': os.environ.get('WEBSITE_SITE_NAME', 'local')
+            'azure_environment': os.environ.get('WEBSITE_SITE_NAME', 'local'),
+            'storage_mode': 'azure_tables_only'
         })
+        
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error(f"❌ Health check failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat(),
+            'storage_mode': 'azure_tables_only'
+        }), 500
+        
+@app.route('/admin/azure-status')
+@login_required
+def admin_azure_status():
+    """Status dettagliato Azure Tables per admin"""
+    user_email = session.get('user_email')
+    
+    if not is_admin_user(user_email):
+        return "Accesso negato", 403
+    
+    try:
+        health = azure_tables_health_check()
+        return jsonify(health)
+    except Exception as e:
         return jsonify({
             'status': 'error',
             'error': str(e),
@@ -1558,31 +1448,42 @@ def manual_sync():
 
 # Inizializzazione sicura all'avvio
 def startup_initialization():
-    """Inizializzazione sicura con retry"""
-    max_attempts = 3
-    for attempt in range(max_attempts):
+    """Inizializzazione OBBLIGATORIA con Azure Tables"""
+    try:
+        logger.info("🚀 === AVVIO INIZIALIZZAZIONE AZURE === 🚀")
+        
+        # STEP 1: Verifica configurazione
+        if not AZURE_STORAGE_CONNECTION_STRING:
+            error_msg = "❌ ERRORE CRITICO: AZURE_STORAGE_CONNECTION_STRING non configurata!"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        
+        logger.info("✅ Configurazione Azure trovata")
+        
+        # STEP 2: Inizializza Azure Tables (OBBLIGATORIO)
+        initialize_azure_tables_mandatory()
+        
+        # STEP 3: Migrazione da file se necessario (OPZIONALE)
         try:
-            logger.info(f"=== Tentativo inizializzazione {attempt + 1}/{max_attempts} ===")
-            
-            # Inizializza Azure Tables se configurato
-            if AZURE_STORAGE_CONNECTION_STRING:
-                if initialize_azure_tables():
-                    logger.info("✓ Azure Table Storage inizializzato")
-                else:
-                    logger.warning("Azure Table Storage non disponibile")
-            
-            # Inizializza storage normale
-            initialize_storage()
-            logger.info("=== App Pronta ===")
-            return True
+            migrate_from_files_to_azure()
         except Exception as e:
-            logger.error(f"Tentativo {attempt + 1} fallito: {e}")
-            if attempt < max_attempts - 1:
-                time.sleep(2)
-    
-    logger.warning("Inizializzazione completata con errori - App in modalità degradata")
-    return False
-
+            logger.warning(f"⚠️  Migrazione fallita (non critico): {e}")
+        
+        # STEP 4: Test finale
+        health = azure_tables_health_check()
+        if health['status'] != 'healthy':
+            raise Exception(f"Health check fallito: {health}")
+        
+        logger.info("🎉 === INIZIALIZZAZIONE COMPLETATA === 🎉")
+        logger.info(f"👥 Utenti: {health['record_counts']['users']}")
+        logger.info(f"📝 Test Results: {health['record_counts']['results']}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"💥 ERRORE CRITICO INIZIALIZZAZIONE: {e}")
+        logger.error("❌ APP NON PUÒ AVVIARSI SENZA AZURE TABLES")
+        raise Exception(f"Inizializzazione fallita: {e}")
 def safe_startup():
     """Inizializzazione sicura che non blocca l'avvio"""
     try:
