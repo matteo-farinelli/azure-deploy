@@ -1293,6 +1293,8 @@ def manual_sync():
         }), 500
 
 # Inizializzazione sicura all'avvio
+# SOSTITUISCI la funzione startup_initialization nel tuo app.py con questa:
+
 def startup_initialization():
     """Inizializzazione OBBLIGATORIA con Azure Tables"""
     try:
@@ -1306,7 +1308,8 @@ def startup_initialization():
         
         logger.info("✅ Configurazione Azure trovata")
         
-        # STEP 2: Inizializza Azure Tables (OBBLIGATORIO)
+        # STEP 2: Inizializza Azure Tables (OBBLIGATORIO) - QUESTA RIGA MANCAVA!
+        from azure_storage import initialize_azure_tables_mandatory, migrate_from_files_to_azure, azure_tables_health_check
         initialize_azure_tables_mandatory()
         
         # STEP 3: Migrazione da file se necessario (OPZIONALE)
@@ -1330,6 +1333,31 @@ def startup_initialization():
         logger.error(f"💥 ERRORE CRITICO INIZIALIZZAZIONE: {e}")
         logger.error("❌ APP NON PUÒ AVVIARSI SENZA AZURE TABLES")
         raise Exception(f"Inizializzazione fallita: {e}")
+
+# AGGIUNGI anche questa route per forzare la creazione delle tabelle manualmente:
+@app.route('/admin/force-create-tables')
+def force_create_tables():
+    """Crea manualmente le tabelle Azure (emergenza)"""
+    try:
+        logger.info("🔧 Creazione forzata tabelle Azure...")
+        
+        from azure_storage import initialize_azure_tables_mandatory
+        initialize_azure_tables_mandatory()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Tabelle create con successo",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Errore creazione tabelle: {e}")
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 500
+        
 def safe_startup():
     """Inizializzazione sicura che non blocca l'avvio"""
     try:
