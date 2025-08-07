@@ -19,7 +19,7 @@ import hashlib
 from azure.data.tables import TableServiceClient, TableEntity
 from azure.core.exceptions import ResourceNotFoundError
 
-# Configurazione logging per Azure
+# Configurazione logging per Azure 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
