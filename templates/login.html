@@ -58,10 +58,7 @@
                             </div>
                         </div>
                         
-                        <div id="adminAlert" class="alert alert-info d-none">
-                            <i class="fas fa-shield-alt me-2"></i>
-                            <strong>Account Amministratore:</strong> Usa la password standard: <code>assessment25</code>
-                        </div>
+                        <!-- ❌ RIMOSSO IL SUGGERIMENTO PASSWORD ADMIN - NON PIÙ NECESSARIO -->
                         
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="rememberMe" name="remember_me">
@@ -113,23 +110,10 @@ function togglePassword(fieldId) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    const emailField = document.getElementById('email');
-    const adminAlert = document.getElementById('adminAlert');
-    const submitBtn = document.getElementById('submitBtn');
+    // ❌ RIMOSSA LA LOGICA CHE MOSTRAVA L'ALERT ADMIN
+    // Ora tutti gli utenti (admin compresi) inseriscono la propria password
     
-    emailField.addEventListener('input', function() {
-        const email = this.value.toLowerCase();
-        const isAdmin = email.startsWith('admin@') && 
-                       (email.includes('auxiell.com') || 
-                        email.includes('euxilia.com') || 
-                        email.includes('xva-services.com'));
-        
-        if (isAdmin) {
-            adminAlert.classList.remove('d-none');
-        } else {
-            adminAlert.classList.add('d-none');
-        }
-    });
+    const submitBtn = document.getElementById('submitBtn');
     
     document.getElementById('loginForm').addEventListener('submit', function() {
         submitBtn.disabled = true;
