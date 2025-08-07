@@ -46,132 +46,6 @@ LOCAL_PROGRESS_FILE = 'user_progress.json'
 AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
 TABLE_NAME_USERS = 'users'
 TABLE_NAME_RESULTS = 'testresults'
-# Cache in memoria per ridurre chiamate a GitHub -
-_data_cache = None
-_cache_timestamp = None
-CACHE_DURATION = 300  # 5 minuti
-
-def get_cached_data():
-    """Restituisce dati dalla cache se validi"""
-    global _data_cache, _cache_timestamp
-    
-    if _data_cache and _cache_timestamp:
-        if (datetime.now() - _cache_timestamp).total_seconds() < CACHE_DURATION:
-            return _data_cache
-    
-    return None
-
-def set_cached_data(data):
-    """Imposta i dati in cache"""
-    global _data_cache, _cache_timestamp
-    _data_cache = data
-    _cache_timestamp = datetime.now()
-
-def safe_load_from_github():
-    """Carica i dati da GitHub con gestione errori sicura e timeout ottimizzato"""
-    try:
-        # Controlla cache prima
-        cached = get_cached_data()
-        if cached:
-            logger.info("Usando dati dalla cache")
-            return cached
-        
-        if not GITHUB_TOKEN or not GITHUB_REPO:
-            logger.warning("Configurazione GitHub mancante")
-            return None
-        
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROGRESS_FILE}"
-        headers = {
-            'Authorization': f'token {GITHUB_TOKEN}',
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'Azure-Flask-App/1.0'
-        }
-        
-        # Timeout ridotto per Azure
-        response = requests.get(url, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            content = response.json()['content']
-            decoded_content = base64.b64decode(content).decode('utf-8')
-            data = json.loads(decoded_content)
-            
-            # Salva in cache
-            set_cached_data(data)
-            
-            logger.info(f"✓ Dati GitHub caricati: {len(data.get('users', {}))} utenti")
-            return data
-        elif response.status_code == 404:
-            logger.warning("File non trovato su GitHub, creazione nuovo file")
-            return None
-        else:
-            logger.warning(f"GitHub API response: {response.status_code}")
-            return None
-            
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout connessione GitHub")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Errore connessione GitHub: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Errore GitHub (non critico): {e}")
-        return None
-
-def initialize_storage():
-    """Inizializza storage in modo sicuro con fallback multipli"""
-    try:
-        logger.info("=== Inizializzazione Storage ===")
-        
-        # Prova a caricare da GitHub
-        github_data = safe_load_from_github()
-        
-        if github_data:
-            # Salva localmente come backup
-            try:
-                with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(github_data, f, indent=2, ensure_ascii=False)
-                logger.info("✓ Dati sincronizzati da GitHub")
-            except Exception as e:
-                logger.warning(f"Impossibile salvare backup locale: {e}")
-            return github_data
-        
-        # Se GitHub non disponibile, usa file locale
-        if os.path.exists(LOCAL_PROGRESS_FILE):
-            try:
-                with open(LOCAL_PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                    local_data = json.load(f)
-                logger.info("✓ Usando dati locali")
-                return local_data
-            except Exception as e:
-                logger.error(f"Errore lettura file locale: {e}")
-        
-        # Crea file nuovo
-        new_data = {
-            "users": {},
-            "test_results": [],
-            "last_updated": datetime.now().isoformat(),
-            "version": "1.0",
-            "created_on_azure": True
-        }
-        
-        try:
-            with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(new_data, f, indent=2, ensure_ascii=False)
-            logger.info("✓ Creato nuovo file progressi")
-        except Exception as e:
-            logger.warning(f"Impossibile creare file locale: {e}")
-        
-        return new_data
-        
-    except Exception as e:
-        logger.error(f"Errore inizializzazione storage: {e}")
-        # Return minimal data per evitare crash
-        return {
-            "users": {},
-            "test_results": [],
-            "last_updated": datetime.now().isoformat(),
-            "error_recovery": True
-        }
 
 def load_progress_data():
     """Carica tutti i dati da Azure Tables"""
@@ -198,121 +72,6 @@ def is_admin_user(email):
     ]
     return email.lower() in [e.lower() for e in admin_emails]
 
-def save_progress_data(data):
-    """Salva progressi con gestione errori migliorata"""
-    try:
-        data["last_updated"] = datetime.now().isoformat()
-        
-        # Aggiorna cache immediatamente
-        set_cached_data(data)
-        
-        # Salva sempre localmente (sincrono)
-        try:
-            with open(LOCAL_PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            logger.info("✓ Dati salvati localmente")
-        except Exception as e:
-            logger.error(f"Errore salvataggio locale: {e}")
-            return False
-        
-        # Salva su GitHub in background (asincrono)
-        if GITHUB_TOKEN and GITHUB_REPO:
-            Thread(target=save_to_github_async, args=(data.copy(),), daemon=True).start()
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Errore salvataggio: {e}")
-        return False
-
-def save_to_github_async(data):
-    """Salva su GitHub in modo asincrono con retry"""
-    max_retries = 2
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            content = json.dumps(data, indent=2, ensure_ascii=False)
-            encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-            
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROGRESS_FILE}"
-            headers = {
-                'Authorization': f'token {GITHUB_TOKEN}',
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'Azure-Flask-App/1.0'
-            }
-            
-            # Get SHA if file exists
-            try:
-                response = requests.get(url, headers=headers, timeout=3)
-                sha = response.json()['sha'] if response.status_code == 200 else None
-            except:
-                sha = None
-            
-            payload = {
-                'message': f'Auto-update progress {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-                'content': encoded_content,
-                'branch': GITHUB_BRANCH
-            }
-            
-            if sha:
-                payload['sha'] = sha
-            
-            response = requests.put(url, headers=headers, json=payload, timeout=8)
-            
-            if response.status_code in [200, 201]:
-                logger.info("✓ GitHub aggiornato")
-                return True
-            else:
-                logger.warning(f"GitHub error: {response.status_code}")
-                
-        except requests.exceptions.Timeout:
-            logger.warning(f"GitHub timeout (tentativo {attempt + 1})")
-        except Exception as e:
-            logger.warning(f"GitHub async save error (tentativo {attempt + 1}): {e}")
-        
-        if attempt < max_retries - 1:
-            time.sleep(retry_delay)
-    
-    logger.error("Fallimento salvataggio GitHub dopo tutti i tentativi")
-    return False
-def get_table_service():
-    """Ottiene il client per Azure Table Storage"""
-    if not AZURE_STORAGE_CONNECTION_STRING:
-        logger.warning("Azure Storage non configurato, uso file locale")
-        return None
-    
-    try:
-        return TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-    except Exception as e:
-        logger.error(f"Errore connessione Azure Storage: {e}")
-        return None
-
-def initialize_azure_tables():
-    """Crea le tabelle se non esistono"""
-    service = get_table_service()
-    if not service:
-        return False
-    
-    try:
-        # Crea tabella users
-        try:
-            service.create_table(TABLE_NAME_USERS)
-            logger.info(f"Tabella {TABLE_NAME_USERS} creata")
-        except:
-            pass  # Tabella già esistente
-        
-        # Crea tabella results
-        try:
-            service.create_table(TABLE_NAME_RESULTS)
-            logger.info(f"Tabella {TABLE_NAME_RESULTS} creata")
-        except:
-            pass  # Tabella già esistente
-        
-        return True
-    except Exception as e:
-        logger.error(f"Errore inizializzazione tabelle: {e}")
-        return False
 # Funzioni helper
 def get_user_data(email):
     """Recupera dati utente SOLO da Azure Table Storage"""
@@ -410,51 +169,59 @@ def validate_password(password):
     return True, ""
 
 def create_user(email, password, nome, cognome, azienda, is_admin=False):
-    """Crea un nuovo utente"""
-    data = load_progress_data()
-    
-    # Per admin, usa password fissa, per utenti normali cripta la password
-    if is_admin:
-        password_hash = hash_password(get_admin_password())
-    else:
-        password_hash = hash_password(password)
-    
-    user_data = {
-        'email': email,
-        'password_hash': password_hash,
-        'nome': nome,
-        'cognome': cognome,
-        'azienda': azienda,
-        'is_admin': is_admin,
-        'created_at': datetime.now().isoformat(),
-        'last_login': None,
-        'login_attempts': 0,
-        'locked_until': None
-    }
-    
-    data["users"][email] = user_data
-    return save_progress_data(data)
+    """Crea un nuovo utente - USA AZURE"""
+    try:
+        # Per admin, usa password fissa, per utenti normali cripta la password
+        if is_admin:
+            password_hash = hash_password(get_admin_password())
+        else:
+            password_hash = hash_password(password)
+        
+        user_data = {
+            'email': email,
+            'password_hash': password_hash,
+            'nome': nome,
+            'cognome': cognome,
+            'azienda': azienda,
+            'is_admin': is_admin,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'login_attempts': 0,
+            'locked_until': None
+        }
+        
+        # USA AZURE INVECE DI FILE
+        return save_user_data_azure_only(email, user_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Errore create_user: {e}")
+        return False
 
 def authenticate_user(email, password):
-    """Autentica un utente"""
-    data = load_progress_data()
-    user_data = data.get("users", {}).get(email)
-    
-    if not user_data:
-        return False, "Utente non trovato"
-    
-    # Verifica password
-    if is_admin_user(email):
-        # Admin usa password in chiaro
-        password_correct = password == get_admin_password()
-    else:
-        # Utenti normali usano hash
-        password_correct = verify_password(user_data.get('password_hash', ''), password)
-    
-    if password_correct:
-        return True, user_data
-    else:
-        return False, "Password errata"
+    """Autentica un utente - USA AZURE"""
+    try:
+        # USA AZURE INVECE DI FILE
+        user_data = get_user_data_azure_only(email)
+        
+        if not user_data:
+            return False, "Utente non trovato"
+        
+        # Verifica password
+        if is_admin_user(email):
+            # Admin usa password in chiaro
+            password_correct = password == get_admin_password()
+        else:
+            # Utenti normali usano hash
+            password_correct = verify_password(user_data.get('password_hash', ''), password)
+        
+        if password_correct:
+            return True, user_data
+        else:
+            return False, "Password errata"
+            
+    except Exception as e:
+        logger.error(f"❌ Errore authenticate_user: {e}")
+        return False, f"Errore autenticazione: {e}"
         
 # Error handlers per Azure
 @app.errorhandler(404)
