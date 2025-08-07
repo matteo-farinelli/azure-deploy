@@ -164,13 +164,10 @@ def validate_password(password):
     return True, ""
 
 def create_user(email, password, nome, cognome, azienda, is_admin=False):
-    """Crea un nuovo utente - USA AZURE"""
+    """Crea un nuovo utente"""
     try:
-        # Per admin, usa password fissa, per utenti normali cripta la password
-        if is_admin:
-            password_hash = hash_password(get_admin_password())
-        else:
-            password_hash = hash_password(password)
+      
+        password_hash = hash_password(password)
         
         user_data = {
             'email': email,
@@ -185,7 +182,7 @@ def create_user(email, password, nome, cognome, azienda, is_admin=False):
             'locked_until': None
         }
         
-        # USA AZURE INVECE DI FILE
+        # USA AZURE
         return save_user_data_azure_only(email, user_data)
         
     except Exception as e:
@@ -193,21 +190,16 @@ def create_user(email, password, nome, cognome, azienda, is_admin=False):
         return False
 
 def authenticate_user(email, password):
-    """Autentica un utente - USA AZURE"""
+    """Autentica un utente - TUTTI usano hash, nessuna eccezione"""
     try:
-        # USA AZURE INVECE DI FILE
+        # USA AZURE per recuperare utente
         user_data = get_user_data_azure_only(email)
         
         if not user_data:
             return False, "Utente non trovato"
         
-        # Verifica password
-        if is_admin_user(email):
-            # Admin usa password in chiaro
-            password_correct = password == get_admin_password()
-        else:
-            # Utenti normali usano hash
-            password_correct = verify_password(user_data.get('password_hash', ''), password)
+        # TUTTI gli utenti (admin compresi) usano SOLO hash - nessuna eccezione
+        password_correct = verify_password(user_data.get('password_hash', ''), password)
         
         if password_correct:
             return True, user_data
@@ -271,11 +263,7 @@ def login():
                                      company_color='#6C757D')
             
             # Verifica password
-            if is_admin_user(email):
-                password_correct = password == get_admin_password()
-            else:
-                password_correct = verify_password(user_data.get('password_hash', ''), password)
-            
+            password_correct = verify_password(user_data.get('password_hash', ''), password)
             if not password_correct:
                 return render_template('login.html', 
                                      error='Password errata',
