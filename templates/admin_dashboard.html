@@ -34,33 +34,39 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label">Azienda</label>
                             <select class="form-select" id="filterAzienda" onchange="applyFilters()">
                                 <option value="">Tutte le Aziende</option>
-                                <option value="auxiell">Auxiell</option>
-                                <option value="euxilia">Euxilia</option>
-                                <option value="xva">XVA Services</option>
+                                <option value="auxiell">auxiell</option>
+                                <option value="euxilia">euxilia</option>
+                                <option value="xva">xva services</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label">Tipo Test</label>
                             <select class="form-select" id="filterTest" onchange="applyFilters()">
                                 <option value="">Tutti i Test</option>
                                 <!-- Opzioni dinamiche popolate via JS -->
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Utente Specifico</label>
+                            <select class="form-select" id="filterUser" onchange="applyFilters()">
+                                <option value="">Tutti gli Utenti</option>
+                                <!-- Opzioni dinamiche popolate via JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label class="form-label">Periodo</label>
                             <select class="form-select" id="filterPeriodo" onchange="applyFilters()">
                                 <option value="">Tutto il Periodo</option>
-                                <option value="7">Ultimi 7 giorni</option>
                                 <option value="30">Ultimi 30 giorni</option>
                                 <option value="90">Ultimi 3 mesi</option>
                                 <option value="365">Ultimo anno</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label">Vista</label>
                             <select class="form-select" id="filterVista" onchange="changeView()">
                                 <option value="overview">Panoramica</option>
@@ -68,6 +74,7 @@
                                 <option value="by-test">Per Tipo Test</option>
                                 <option value="timeline">Timeline</option>
                                 <option value="performance">Performance</option>
+                                <option value="user-detail">Dettaglio Utente</option>
                             </select>
                         </div>
                     </div>
@@ -200,7 +207,7 @@
         </div>
         
         <!-- Vista Per Azienda -->
-        <div id="viewByCompany" class="dashboard-view d-none">
+        <div id="viewBycompany" class="dashboard-view d-none">
             <div class="row">
                 <div class="col-md-8">
                     <div class="dashboard-card">
@@ -228,7 +235,7 @@
         </div>
         
         <!-- Vista Per Tipo Test -->
-        <div id="viewByTest" class="dashboard-view d-none">
+        <div id="viewBytest" class="dashboard-view d-none">
             <div class="row">
                 <div class="col-md-12">
                     <div class="dashboard-card">
@@ -253,20 +260,20 @@
                             <i class="fas fa-chart-line text-warning me-2"></i>
                             Andamento nel Tempo
                         </h3>
-                        <div id="timelineChart">
-                            <!-- Grafico timeline -->
+                        <div style="height: 400px;">
+                            <canvas id="timelineChart"></canvas>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6 mt-4">
                     <div class="dashboard-card">
                         <h3 class="mb-3">Tendenze Mensili</h3>
-                        <div id="monthlyTrends">
-                            <!-- Grafici mensili -->
+                        <div style="height: 300px;">
+                            <canvas id="monthlyTrendsChart"></canvas>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6 mt-4">
                     <div class="dashboard-card">
                         <h3 class="mb-3">Confronto Periodi</h3>
                         <div id="periodComparison">
@@ -299,6 +306,47 @@
                         </h3>
                         <div id="rankingList">
                             <!-- Ranking utenti/aziende -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vista Dettaglio Utente -->
+        <div id="viewUserdetail" class="dashboard-view d-none">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-user-circle text-info me-2"></i>
+                            Dettaglio Utente <span id="selectedUserName"></span>
+                        </h3>
+                        <div id="userDetailContent">
+                            <!-- Dettagli specifici dell'utente -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-chart-pie text-primary me-2"></i>
+                            Statistiche Utente
+                        </h3>
+                        <div id="userStats">
+                            <!-- Statistiche utente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-chart-line text-success me-2"></i>
+                            Progresso nel Tempo
+                        </h3>
+                        <div style="height: 300px;">
+                            <canvas id="userProgressChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -389,6 +437,9 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
 <script>
 // Dati globali
 let allData = {
@@ -397,10 +448,15 @@ let allData = {
     filteredData: []
 };
 
+// Chart instances
+let timelineChart = null;
+let monthlyTrendsChart = null;
+let userProgressChart = null;
+
 // Inizializzazione
 document.addEventListener('DOMContentLoaded', function() {
     loadInitialData();
-    populateTestFilters();
+    populateFilters();
 });
 
 // Carica dati iniziali
@@ -423,6 +479,12 @@ async function loadInitialData() {
     }
 }
 
+// Popola tutti i filtri dinamicamente
+function populateFilters() {
+    populateTestFilters();
+    populateUserFilters();
+}
+
 // Popola filtri test dinamicamente
 function populateTestFilters() {
     const testFilter = document.getElementById('filterTest');
@@ -438,10 +500,42 @@ function populateTestFilters() {
     });
 }
 
+// Popola filtri utenti dinamicamente
+function populateUserFilters() {
+    const userFilter = document.getElementById('filterUser');
+    const uniqueUsers = [...new Set(allData.testResults.map(test => test.user_email))];
+    
+    uniqueUsers.forEach(email => {
+        if (email) {
+            const option = document.createElement('option');
+            option.value = email;
+            // Estrai nome dall'email
+            const name = extractNameFromEmail(email);
+            option.textContent = `${name} (${email})`;
+            userFilter.appendChild(option);
+        }
+    });
+}
+
+// Estrai nome dall'email
+function extractNameFromEmail(email) {
+    if (email.startsWith('admin@')) {
+        return "Admin Sistema";
+    }
+    
+    const localPart = email.split('@')[0];
+    const parts = localPart.split('.');
+    if (parts.length >= 2) {
+        return `${parts[0].charAt(0).toUpperCase() + parts[0].slice(1)} ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
+    }
+    return "User Unknown";
+}
+
 // Applica filtri
 function applyFilters() {
     const azienda = document.getElementById('filterAzienda').value;
     const test = document.getElementById('filterTest').value;
+    const user = document.getElementById('filterUser').value;
     const periodo = document.getElementById('filterPeriodo').value;
     
     let filtered = allData.testResults;
@@ -454,6 +548,11 @@ function applyFilters() {
     // Filtro test
     if (test) {
         filtered = filtered.filter(item => item.test_name === test);
+    }
+    
+    // Filtro utente
+    if (user) {
+        filtered = filtered.filter(item => item.user_email === user);
     }
     
     // Filtro periodo
@@ -513,6 +612,9 @@ function updateCurrentView() {
             break;
         case 'performance':
             updatePerformanceView();
+            break;
+        case 'user-detail':
+            updateUserDetailView();
             break;
     }
     
@@ -591,7 +693,7 @@ function updateCompanyStatsTable() {
         
         html += `
             <tr>
-                <td><span class="badge" style="background-color: ${badgeColor}">${company.charAt(0).toUpperCase() + company.slice(1)}</span></td>
+                <td><span class="badge" style="background-color: ${badgeColor}">${company}</span></td>
                 <td class="text-center">${stats.users.size}</td>
                 <td class="text-center">${stats.tests}</td>
                 <td class="text-center">
@@ -629,12 +731,13 @@ function updateRecentTestsList() {
         const score = test.score || 0;
         const badgeClass = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
         const date = test.completed_at ? test.completed_at.split('T')[0] : 'N/A';
+        const userName = test.user_name || extractNameFromEmail(test.user_email || '');
         
         html += `
             <div class="list-group-item">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <h6 class="mb-1">${test.user_name || 'N/A'}</h6>
+                        <h6 class="mb-1">${userName}</h6>
                         <p class="mb-1 small">${test.test_name || 'Test Sconosciuto'}</p>
                         <small class="text-muted">
                             <i class="fas fa-calendar me-1"></i>${date}
@@ -658,151 +761,6 @@ function updateRecentTestsList() {
 }
 
 // Vista per azienda
-function updateCompanyView() {
-    // Implementa analisi dettagliata per azienda
-    const container = document.getElementById('companyDetailedAnalysis');
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-            <p class="text-muted">Analisi dettagliata per azienda in sviluppo...</p>
-        </div>
-    `;
-}
-
-// Vista per tipo test
-function updateTestView() {
-    // Implementa analisi per tipo di test
-    const container = document.getElementById('testTypeAnalysis');
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-            <p class="text-muted">Analisi per tipo di test in sviluppo...</p>
-        </div>
-    `;
-}
-
-// Vista timeline
-function updateTimelineView() {
-    // Implementa vista timeline
-    const container = document.getElementById('timelineChart');
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-            <p class="text-muted">Grafici timeline in sviluppo...</p>
-        </div>
-    `;
-}
-
-// Vista performance
-function updatePerformanceView() {
-    // Implementa analisi performance
-    const container = document.getElementById('performanceAnalysis');
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
-            <p class="text-muted">Analisi performance in sviluppo...</p>
-        </div>
-    `;
-}
-
-// Funzioni utility
-function capitalizeFirst(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-}
-
-function showLoading(show) {
-    const overlay = document.getElementById('loadingOverlay');
-    if (show) {
-        overlay.classList.remove('d-none');
-    } else {
-        overlay.classList.add('d-none');
-    }
-}
-
-// Verifica stato Azure
-async function checkAzureStatus() {
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Verificando...';
-    btn.disabled = true;
-    
-    try {
-        const response = await fetch('/admin/azure-status');
-        const data = await response.json();
-        
-        if (data.status === 'healthy') {
-            showAlert(`
-                <strong>Azure Status: OK</strong><br>
-                <small>Utenti: ${data.record_counts?.users || 0} | Risultati: ${data.record_counts?.results || 0}</small>
-            `, 'success');
-        } else {
-            showAlert(`<strong>Azure Status: Errore</strong><br>${data.error || 'Stato sconosciuto'}`, 'warning');
-        }
-    } catch (error) {
-        showAlert(`<strong>Errore verifica Azure:</strong><br>${error.message}`, 'danger');
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-// Aggiorna dati
-async function refreshData() {
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Aggiornando...';
-    btn.disabled = true;
-    
-    try {
-        showLoading(true);
-        
-        // Ricarica la pagina per ottenere dati freschi
-        setTimeout(() => {
-            location.reload();
-        }, 1000);
-        
-        showAlert('Dati aggiornati con successo!', 'success');
-        
-    } catch (error) {
-        showAlert(`<strong>Errore aggiornamento:</strong><br>${error.message}`, 'danger');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        showLoading(false);
-    }
-}
-
-// Funzione per mostrare alert dinamici
-function showAlert(message, type = 'info') {
-    const alertContainer = document.getElementById('alertContainer');
-    const alertId = 'alert-' + Date.now();
-    
-    const alertDiv = document.createElement('div');
-    alertDiv.id = alertId;
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show mb-2`;
-    alertDiv.style.cssText = 'min-width: 350px; max-width: 500px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" onclick="removeAlert('${alertId}')"></button>
-    `;
-    
-    alertContainer.appendChild(alertDiv);
-    
-    // Auto-remove dopo 5 secondi
-    setTimeout(() => removeAlert(alertId), 5000);
-}
-
-// Funzione per rimuovere alert
-function removeAlert(alertId) {
-    const alert = document.getElementById(alertId);
-    if (alert) {
-        alert.classList.remove('show');
-        setTimeout(() => alert.remove(), 150);
-    }
-}
-
-// Implementazioni avanzate delle viste
-
-// Vista dettagliata per azienda
 function updateCompanyView() {
     const container = document.getElementById('companyDetailedAnalysis');
     const data = allData.filteredData;
@@ -829,7 +787,6 @@ function updateCompanyView() {
         const scores = stats.tests.map(t => t.score || 0).filter(s => s > 0);
         const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
         const successRate = scores.length ? ((scores.filter(s => s >= 60).length / scores.length) * 100).toFixed(1) : 0;
-        const completionRate = stats.users.size > 0 ? ((stats.tests.length / stats.users.size).toFixed(1)) : 0;
         
         const badgeColor = company === 'auxiell' ? '#6C757D' : 
                           company === 'euxilia' ? '#4A90C2' : 
@@ -841,7 +798,7 @@ function updateCompanyView() {
                     <div class="card-header" style="background-color: ${badgeColor}; color: white;">
                         <h5 class="mb-0">
                             <i class="fas fa-building me-2"></i>
-                            ${company.charAt(0).toUpperCase() + company.slice(1)}
+                            ${company}
                         </h5>
                     </div>
                     <div class="card-body">
@@ -905,7 +862,7 @@ function updateTopPerformers() {
         const email = test.user_email;
         if (!byUser[email]) {
             byUser[email] = {
-                name: test.user_name || 'Unknown',
+                name: extractNameFromEmail(email),
                 azienda: test.azienda,
                 tests: [],
                 totalScore: 0,
@@ -1021,29 +978,11 @@ function updateTestView() {
     });
     
     html += `</tbody></table></div>`;
-    
-    // Aggiungi grafico distribuzione punteggi
-    html += `
-        <div class="mt-4">
-            <h5>Distribuzione Punteggi per Test</h5>
-            <div id="scoreDistributionChart" style="height: 300px;">
-                <!-- Qui potrai integrare Chart.js o D3.js per grafici -->
-                <div class="text-center py-4 bg-light rounded">
-                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                    <p class="text-muted">Grafico distribuzione punteggi<br><small>Integrabile con Chart.js</small></p>
-                </div>
-            </div>
-        </div>
-    `;
-    
     container.innerHTML = html;
 }
 
-// Vista timeline
+// Vista timeline con Chart.js
 function updateTimelineView() {
-    const container = document.getElementById('timelineChart');
-    const monthlyContainer = document.getElementById('monthlyTrends');
-    const comparisonContainer = document.getElementById('periodComparison');
     const data = allData.filteredData;
     
     // Raggruppa per data
@@ -1064,67 +1003,222 @@ function updateTimelineView() {
         }
     });
     
-    // Timeline principale
+    // Prepara dati per il grafico
     const sortedDates = Object.keys(byDate).sort();
-    let timelineHtml = `
-        <div class="row">
-            <div class="col-12">
-                <h5>Attività Giornaliera</h5>
-                <div style="height: 300px;" class="bg-light rounded p-3">
-                    <div class="text-center py-4">
-                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Grafico timeline attività<br><small>Integrabile con Chart.js</small></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-4">
-            <h5>Riepilogo Cronologico</h5>
-            <div class="timeline-container" style="max-height: 400px; overflow-y: auto;">
-    `;
+    const chartData = {
+        labels: sortedDates.map(date => new Date(date).toLocaleDateString('it-IT')),
+        datasets: [
+            {
+                label: 'Test Completati',
+                data: sortedDates.map(date => byDate[date].count),
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                tension: 0.1,
+                yAxisID: 'y'
+            },
+            {
+                label: 'Punteggio Medio (%)',
+                data: sortedDates.map(date => {
+                    const scores = byDate[date].scores.filter(s => s > 0);
+                    return scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+                }),
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                tension: 0.1,
+                yAxisID: 'y1'
+            }
+        ]
+    };
     
-    sortedDates.slice(-10).reverse().forEach(date => {
-        const dayData = byDate[date];
-        const avgScore = dayData.scores.length ? 
-            (dayData.scores.reduce((a, b) => a + b, 0) / dayData.scores.length).toFixed(1) : 0;
-        
-        timelineHtml += `
-            <div class="border-start border-primary border-3 ps-3 mb-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="mb-1">${new Date(date).toLocaleDateString('it-IT')}</h6>
-                        <small class="text-muted">
-                            ${dayData.count} test • ${dayData.users.size} utenti • Media: ${avgScore}%
-                        </small>
-                    </div>
-                    <span class="badge ${avgScore >= 80 ? 'bg-success' : avgScore >= 60 ? 'bg-warning' : 'bg-danger'}">
-                        ${avgScore}%
-                    </span>
-                </div>
-            </div>
-        `;
+    // Distruggi grafico esistente
+    if (timelineChart) {
+        timelineChart.destroy();
+    }
+    
+    // Crea nuovo grafico
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    timelineChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Data'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Numero Test'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Punteggio Medio (%)'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    min: 0,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                title: {
+                    display: true,
+                    text: 'Andamento Test nel Tempo'
+                }
+            }
+        }
     });
     
-    timelineHtml += '</div></div>';
-    container.innerHTML = timelineHtml;
+    // Aggiorna grafico mensile
+    updateMonthlyTrendsChart();
+    updatePeriodComparison();
+}
+
+// Grafico tendenze mensili
+function updateMonthlyTrendsChart() {
+    const data = allData.filteredData;
     
-    // Tendenze mensili
-    monthlyContainer.innerHTML = `
-        <div style="height: 250px;" class="bg-light rounded p-3">
-            <div class="text-center py-4">
-                <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
-                <p class="text-muted">Tendenze mensili<br><small>Integrabile con Chart.js</small></p>
+    // Raggruppa per mese
+    const byMonth = {};
+    data.forEach(test => {
+        if (test.completed_at) {
+            const date = new Date(test.completed_at);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            if (!byMonth[monthKey]) {
+                byMonth[monthKey] = {
+                    count: 0,
+                    scores: []
+                };
+            }
+            byMonth[monthKey].count++;
+            byMonth[monthKey].scores.push(test.score || 0);
+        }
+    });
+    
+    const sortedMonths = Object.keys(byMonth).sort();
+    const monthlyData = {
+        labels: sortedMonths.map(month => {
+            const [year, monthNum] = month.split('-');
+            return new Date(year, monthNum - 1).toLocaleDateString('it-IT', { year: 'numeric', month: 'short' });
+        }),
+        datasets: [{
+            label: 'Test per Mese',
+            data: sortedMonths.map(month => byMonth[month].count),
+            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    };
+    
+    // Distruggi grafico esistente
+    if (monthlyTrendsChart) {
+        monthlyTrendsChart.destroy();
+    }
+    
+    // Crea nuovo grafico
+    const ctx = document.getElementById('monthlyTrendsChart').getContext('2d');
+    monthlyTrendsChart = new Chart(ctx, {
+        type: 'bar',
+        data: monthlyData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Test Completati per Mese'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Numero Test'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Confronto periodi
+function updatePeriodComparison() {
+    const container = document.getElementById('periodComparison');
+    const data = allData.filteredData;
+    
+    const now = new Date();
+    const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const lastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const thisWeek = data.filter(test => {
+        if (test.completed_at) {
+            const testDate = new Date(test.completed_at);
+            return testDate >= lastWeek;
+        }
+        return false;
+    });
+    
+    const thisMonth = data.filter(test => {
+        if (test.completed_at) {
+            const testDate = new Date(test.completed_at);
+            return testDate >= lastMonth;
+        }
+        return false;
+    });
+    
+    const weekAvg = thisWeek.length ? (thisWeek.reduce((sum, test) => sum + (test.score || 0), 0) / thisWeek.length).toFixed(1) : 0;
+    const monthAvg = thisMonth.length ? (thisMonth.reduce((sum, test) => sum + (test.score || 0), 0) / thisMonth.length).toFixed(1) : 0;
+    
+    container.innerHTML = `
+        <div class="row text-center">
+            <div class="col-6">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h4 class="text-primary">${thisWeek.length}</h4>
+                        <p class="mb-1">Test Ultima Settimana</p>
+                        <small class="text-muted">Media: ${weekAvg}%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h4 class="text-success">${thisMonth.length}</h4>
+                        <p class="mb-1">Test Ultimo Mese</p>
+                        <small class="text-muted">Media: ${monthAvg}%</small>
+                    </div>
+                </div>
             </div>
         </div>
-    `;
-    
-    // Confronto periodi
-    comparisonContainer.innerHTML = `
-        <div style="height: 250px;" class="bg-light rounded p-3">
-            <div class="text-center py-4">
-                <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
-                <p class="text-muted">Confronto periodi<br><small>Settimana vs Mese precedente</small></p>
+        <div class="mt-3 text-center">
+            <div class="alert alert-info">
+                <strong>Trend:</strong> 
+                ${thisWeek.length > thisMonth.length / 4 ? 
+                    '<i class="fas fa-arrow-up text-success"></i> In crescita' : 
+                    '<i class="fas fa-arrow-down text-warning"></i> In calo'}
             </div>
         </div>
     `;
@@ -1157,7 +1251,7 @@ function updatePerformanceView() {
                         <span class="badge bg-success">${stats.excellent}</span>
                     </div>
                     <div class="progress mb-3" style="height: 8px;">
-                        <div class="progress-bar bg-success" style="width: ${(stats.excellent / stats.total * 100)}%"></div>
+                        <div class="progress-bar bg-success" style="width: ${stats.total > 0 ? (stats.excellent / stats.total * 100) : 0}%"></div>
                     </div>
                     
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1165,7 +1259,7 @@ function updatePerformanceView() {
                         <span class="badge bg-info">${stats.good}</span>
                     </div>
                     <div class="progress mb-3" style="height: 8px;">
-                        <div class="progress-bar bg-info" style="width: ${(stats.good / stats.total * 100)}%"></div>
+                        <div class="progress-bar bg-info" style="width: ${stats.total > 0 ? (stats.good / stats.total * 100) : 0}%"></div>
                     </div>
                     
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1173,7 +1267,7 @@ function updatePerformanceView() {
                         <span class="badge bg-warning">${stats.satisfactory}</span>
                     </div>
                     <div class="progress mb-3" style="height: 8px;">
-                        <div class="progress-bar bg-warning" style="width: ${(stats.satisfactory / stats.total * 100)}%"></div>
+                        <div class="progress-bar bg-warning" style="width: ${stats.total > 0 ? (stats.satisfactory / stats.total * 100) : 0}%"></div>
                     </div>
                     
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1181,7 +1275,7 @@ function updatePerformanceView() {
                         <span class="badge bg-danger">${stats.needsImprovement}</span>
                     </div>
                     <div class="progress mb-3" style="height: 8px;">
-                        <div class="progress-bar bg-danger" style="width: ${(stats.needsImprovement / stats.total * 100)}%"></div>
+                        <div class="progress-bar bg-danger" style="width: ${stats.total > 0 ? (stats.needsImprovement / stats.total * 100) : 0}%"></div>
                     </div>
                 </div>
             </div>
@@ -1199,7 +1293,7 @@ function updatePerformanceView() {
                     <div class="col-6">
                         <div class="card bg-success text-white mb-3">
                             <div class="card-body">
-                                <h3>${((stats.excellent + stats.good) / stats.total * 100).toFixed(1)}%</h3>
+                                <h3>${stats.total > 0 ? ((stats.excellent + stats.good) / stats.total * 100).toFixed(1) : 0}%</h3>
                                 <small>Performance Ottima</small>
                             </div>
                         </div>
@@ -1207,7 +1301,7 @@ function updatePerformanceView() {
                     <div class="col-6">
                         <div class="card bg-warning text-white mb-3">
                             <div class="card-body">
-                                <h3>${(stats.satisfactory / stats.total * 100).toFixed(1)}%</h3>
+                                <h3>${stats.total > 0 ? (stats.satisfactory / stats.total * 100).toFixed(1) : 0}%</h3>
                                 <small>Performance Media</small>
                             </div>
                         </div>
@@ -1215,7 +1309,7 @@ function updatePerformanceView() {
                     <div class="col-6">
                         <div class="card bg-danger text-white mb-3">
                             <div class="card-body">
-                                <h3>${(stats.needsImprovement / stats.total * 100).toFixed(1)}%</h3>
+                                <h3>${stats.total > 0 ? (stats.needsImprovement / stats.total * 100).toFixed(1) : 0}%</h3>
                                 <small>Necessita Supporto</small>
                             </div>
                         </div>
@@ -1233,7 +1327,7 @@ function updatePerformanceView() {
         const email = test.user_email;
         if (!byUser[email]) {
             byUser[email] = {
-                name: test.user_name || 'Unknown',
+                name: extractNameFromEmail(email),
                 azienda: test.azienda,
                 tests: [],
                 totalScore: 0,
@@ -1279,5 +1373,492 @@ function updatePerformanceView() {
     rankingHtml += '</div>';
     rankingContainer.innerHTML = rankingHtml;
 }
+
+// Vista dettaglio utente
+function updateUserDetailView() {
+    const selectedUser = document.getElementById('filterUser').value;
+    const userNameElement = document.getElementById('selectedUserName');
+    const contentContainer = document.getElementById('userDetailContent');
+    const statsContainer = document.getElementById('userStats');
+    
+    if (!selectedUser) {
+        userNameElement.textContent = '- Seleziona un utente dal filtro';
+        contentContainer.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-user-plus fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Seleziona un utente specifico dal filtro per vedere i dettagli</h5>
+                <p class="text-muted">Utilizza il filtro "Utente Specifico" per visualizzare i risultati di un singolo utente</p>
+            </div>
+        `;
+        statsContainer.innerHTML = '';
+        return;
+    }
+    
+    const userName = extractNameFromEmail(selectedUser);
+    userNameElement.textContent = `- ${userName}`;
+    
+    // Filtra dati per l'utente selezionato
+    const userData = allData.testResults.filter(test => test.user_email === selectedUser);
+    
+    if (userData.length === 0) {
+        contentContainer.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-exclamation-circle fa-3x text-warning mb-3"></i>
+                <h5 class="text-warning">Nessun test trovato per questo utente</h5>
+            </div>
+        `;
+        return;
+    }
+    
+    // Ordina per data
+    userData.sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+    
+    // Costruisci tabella dettagliata
+    let detailHtml = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Test</th>
+                        <th class="text-center">Punteggio</th>
+                        <th class="text-center">Risposte Corrette</th>
+                        <th class="text-center">Stato</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    userData.forEach(test => {
+        const date = test.completed_at ? new Date(test.completed_at).toLocaleDateString('it-IT') : 'N/A';
+        const score = test.score || 0;
+        const badgeClass = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
+        const status = score >= 60 ? 'Superato' : 'Non Superato';
+        const statusClass = score >= 60 ? 'text-success' : 'text-danger';
+        
+        detailHtml += `
+            <tr>
+                <td>${date}</td>
+                <td>${test.test_name || 'N/A'}</td>
+                <td class="text-center">
+                    <span class="badge bg-${badgeClass} fs-6">${score}%</span>
+                </td>
+                <td class="text-center">${test.correct_answers || 0}/${test.total_questions || 0}</td>
+                <td class="text-center">
+                    <span class="${statusClass}"><strong>${status}</strong></span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    detailHtml += `</tbody></table></div>`;
+    contentContainer.innerHTML = detailHtml;
+    
+    // Statistiche utente
+    const scores = userData.map(test => test.score || 0).filter(s => s > 0);
+    const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+    const bestScore = scores.length ? Math.max(...scores) : 0;
+    const worstScore = scores.length ? Math.min(...scores) : 0;
+    const passedTests = scores.filter(s => s >= 60).length;
+    const totalTests = userData.length;
+    
+    statsContainer.innerHTML = `
+        <div class="row text-center mb-3">
+            <div class="col-6">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h4>${totalTests}</h4>
+                        <small>Test Totali</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h4>${passedTests}</h4>
+                        <small>Test Superati</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row text-center">
+            <div class="col-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h5>${avgScore}%</h5>
+                        <small>Media</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <h5>${bestScore}%</h5>
+                        <small>Migliore</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h5>${worstScore}%</h5>
+                        <small>Peggiore</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="progress">
+                <div class="progress-bar bg-success" style="width: ${totalTests > 0 ? (passedTests / totalTests * 100) : 0}%">
+                    ${totalTests > 0 ? ((passedTests / totalTests) * 100).toFixed(1) : 0}% Successo
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Aggiorna grafico progresso utente
+    updateUserProgressChart(userData);
+}
+
+// Grafico progresso utente
+function updateUserProgressChart(userData) {
+    const sortedData = userData.sort((a, b) => new Date(a.completed_at || 0) - new Date(b.completed_at || 0));
+    
+    const chartData = {
+        labels: sortedData.map((test, index) => `Test ${index + 1}`),
+        datasets: [{
+            label: 'Punteggio (%)',
+            data: sortedData.map(test => test.score || 0),
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1,
+            fill: true
+        }]
+    };
+    
+    // Distruggi grafico esistente
+    if (userProgressChart) {
+        userProgressChart.destroy();
+    }
+    
+    // Crea nuovo grafico
+    const ctx = document.getElementById('userProgressChart').getContext('2d');
+    userProgressChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Progresso nel Tempo'
+                },
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Punteggio (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Test Cronologico'
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 6,
+                    hoverRadius: 8
+                }
+            }
+        }
+    });
+}
+
+// Funzioni utility
+function capitalizeFirst(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (show) {
+        overlay.classList.remove('d-none');
+    } else {
+        overlay.classList.add('d-none');
+    }
+}
+
+// Verifica stato Azure
+async function checkAzureStatus() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Verificando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/admin/azure-status');
+        const data = await response.json();
+        
+        if (data.status === 'healthy') {
+            showAlert(`
+                <strong>Azure Status: OK</strong><br>
+                <small>Utenti: ${data.record_counts?.users || 0} | Risultati: ${data.record_counts?.results || 0}</small>
+            `, 'success');
+        } else {
+            showAlert(`<strong>Azure Status: Errore</strong><br>${data.error || 'Stato sconosciuto'}`, 'warning');
+        }
+    } catch (error) {
+        showAlert(`<strong>Errore verifica Azure:</strong><br>${error.message}`, 'danger');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+// Aggiorna dati
+async function refreshData() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Aggiornando...';
+    btn.disabled = true;
+    
+    try {
+        showLoading(true);
+        
+        // Ricarica la pagina per ottenere dati freschi
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+        
+        showAlert('Dati aggiornati con successo!', 'success');
+        
+    } catch (error) {
+        showAlert(`<strong>Errore aggiornamento:</strong><br>${error.message}`, 'danger');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showLoading(false);
+    }
+}
+
+// Funzione per mostrare alert dinamici
+function showAlert(message, type = 'info') {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertId = 'alert-' + Date.now();
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.id = alertId;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show mb-2`;
+    alertDiv.style.cssText = 'min-width: 350px; max-width: 500px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="removeAlert('${alertId}')"></button>
+    `;
+    
+    alertContainer.appendChild(alertDiv);
+    
+    // Auto-remove dopo 5 secondi
+    setTimeout(() => removeAlert(alertId), 5000);
+}
+
+// Funzione per rimuovere alert
+function removeAlert(alertId) {
+    const alert = document.getElementById(alertId);
+    if (alert) {
+        alert.classList.remove('show');
+        setTimeout(() => alert.remove(), 150);
+    }
+}
+
+// Event listener per cambio filtro utente
+document.addEventListener('DOMContentLoaded', function() {
+    const userFilter = document.getElementById('filterUser');
+    const vistaFilter = document.getElementById('filterVista');
+    
+    // Auto-switch alla vista dettaglio utente quando si seleziona un utente
+    userFilter.addEventListener('change', function() {
+        if (this.value && vistaFilter.value !== 'user-detail') {
+            vistaFilter.value = 'user-detail';
+            changeView();
+        }
+    });
+    
+    // Reset filtro utente quando si cambia vista (eccetto user-detail)
+    vistaFilter.addEventListener('change', function() {
+        if (this.value !== 'user-detail') {
+            userFilter.value = '';
+            applyFilters();
+        }
+    });
+});
+
+// Cleanup grafici quando si cambia vista
+function destroyCharts() {
+    if (timelineChart) {
+        timelineChart.destroy();
+        timelineChart = null;
+    }
+    if (monthlyTrendsChart) {
+        monthlyTrendsChart.destroy();
+        monthlyTrendsChart = null;
+    }
+    if (userProgressChart) {
+        userProgressChart.destroy();
+        userProgressChart = null;
+    }
+}
+
+// Override della funzione changeView per gestire cleanup
+const originalChangeView = changeView;
+changeView = function() {
+    const previousVista = document.getElementById('filterVista').value;
+    
+    // Distruggi grafici se si sta cambiando vista
+    if (previousVista === 'timeline' || previousVista === 'user-detail') {
+        destroyCharts();
+    }
+    
+    // Chiama la funzione originale
+    originalChangeView();
+};
+
 </script>
+
+<style>
+.stats-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-left: 4px solid #007bff;
+}
+
+.stats-number {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.dashboard-card {
+    background: white;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+}
+
+.dashboard-card h3 {
+    border-bottom: 2px solid #f8f9fa;
+    padding-bottom: 10px;
+}
+
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+.timeline-container {
+    border-left: 3px solid #007bff;
+    padding-left: 20px;
+}
+
+.progress {
+    height: 10px;
+    border-radius: 5px;
+}
+
+.badge {
+    font-size: 0.85em;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+#alertContainer .alert {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: none;
+    border-radius: 8px;
+}
+
+.text-gold {
+    color: #D4AF37 !important;
+}
+
+/* Responsive charts */
+@media (max-width: 768px) {
+    .stats-card {
+        margin-bottom: 15px;
+        padding: 15px;
+    }
+    
+    .stats-number {
+        font-size: 1.5rem;
+    }
+    
+    .dashboard-card {
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+}
+
+/* Loading overlay styling */
+#loadingOverlay {
+    backdrop-filter: blur(2px);
+}
+
+#loadingOverlay .spinner-border {
+    border-width: 0.3em;
+}
+
+/* Chart containers */
+canvas {
+    max-height: 400px;
+}
+
+/* Custom scrollbar for ranking */
+#rankingList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#rankingList::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+#rankingList::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+#rankingList::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+</style>
 {% endblock %}
+        
