@@ -1,10 +1,9 @@
-<!-- templates/admin_dashboard.html - Versione Migliorata -->
 {% extends "base.html" %}
 
 {% block title %}Dashboard Admin - Assessment App{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container-fluid">
     <!-- Header Section -->
     <div class="row">
         <div class="col-12">
@@ -23,71 +22,90 @@
     <div class="alert alert-info mb-4">
         <i class="fas fa-info-circle me-2"></i>
         <strong>Modalità Amministratore</strong> - Hai accesso a tutti i dati e statistiche del sistema.
-        <small class="d-block mt-1">Modalità Amministratore Attiva</small>
+        <small class="d-block mt-1">Sistema Azure Tables - Dati Persistenti</small>
+    </div>
+    
+    <!-- Filtri Dinamici -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-filter me-2"></i>Filtri Dinamici</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Azienda</label>
+                            <select class="form-select" id="filterAzienda" onchange="applyFilters()">
+                                <option value="">Tutte le Aziende</option>
+                                <option value="auxiell">Auxiell</option>
+                                <option value="euxilia">Euxilia</option>
+                                <option value="xva">XVA Services</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Tipo Test</label>
+                            <select class="form-select" id="filterTest" onchange="applyFilters()">
+                                <option value="">Tutti i Test</option>
+                                <!-- Opzioni dinamiche popolate via JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Periodo</label>
+                            <select class="form-select" id="filterPeriodo" onchange="applyFilters()">
+                                <option value="">Tutto il Periodo</option>
+                                <option value="7">Ultimi 7 giorni</option>
+                                <option value="30">Ultimi 30 giorni</option>
+                                <option value="90">Ultimi 3 mesi</option>
+                                <option value="365">Ultimo anno</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Vista</label>
+                            <select class="form-select" id="filterVista" onchange="changeView()">
+                                <option value="overview">Panoramica</option>
+                                <option value="by-company">Per Azienda</option>
+                                <option value="by-test">Per Tipo Test</option>
+                                <option value="timeline">Timeline</option>
+                                <option value="performance">Performance</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Statistiche Generali -->
-    <div class="row mb-4">
-        <div class="col-md-3">
+    <div class="row mb-4" id="statsOverview">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Utenti Totali</h5>
-                        <div class="stats-number">{{ total_users|default(0) }}</div>
+                        <div class="stats-number" id="totalUsers">{{ total_users|default(0) }}</div>
                     </div>
                     <i class="fas fa-users fa-3x opacity-50"></i>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Test Completati</h5>
-                        <div class="stats-number">{{ total_tests|default(0) }}</div>
+                        <div class="stats-number" id="totalTests">{{ total_tests|default(0) }}</div>
                     </div>
                     <i class="fas fa-clipboard-check fa-3x opacity-50"></i>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Aziende Attive</h5>
-                        <div class="stats-number">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</div>
-                    </div>
-                    <i class="fas fa-building fa-3x opacity-50"></i>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Media Test/Utente</h5>
-                        <div class="stats-number">
-                            {% if total_users and total_users > 0 %}
-                                {{ (total_tests / total_users)|round(1) }}
-                            {% else %}
-                                0
-                            {% endif %}
-                        </div>
-                    </div>
-                    <i class="fas fa-chart-bar fa-3x opacity-50"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Riga aggiuntiva per punteggio medio -->
-    <div class="row mb-4">
-        <div class="col-md-3 offset-md-3">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Punteggio Medio</h5>
-                        <div class="stats-number">
+                        <div class="stats-number" id="avgScore">
                             {% if average_score is defined %}
                                 {{ average_score|round(1) }}%
                             {% else %}
@@ -99,12 +117,12 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5>Tasso Successo</h5>
-                        <div class="stats-number">
+                        <div class="stats-number" id="successRate">
                             {% if success_rate is defined %}
                                 {{ success_rate|round(1) }}%
                             {% else %}
@@ -117,168 +135,176 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Test/Utente</h5>
+                        <div class="stats-number" id="testsPerUser">
+                            {% if total_users and total_users > 0 %}
+                                {{ (total_tests / total_users)|round(1) }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="fas fa-chart-bar fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5>Aziende Attive</h5>
+                        <div class="stats-number" id="activeCompanies">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</div>
+                    </div>
+                    <i class="fas fa-building fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <div class="row">
-        <!-- Statistiche per Azienda -->
-        <div class="col-md-6">
-            <div class="dashboard-card">
-                <h3 class="mb-3">
-                    <i class="fas fa-chart-pie text-primary me-2"></i>
-                    Statistiche per Azienda
-                </h3>
+    <!-- Container Dinamico per le Viste -->
+    <div id="dynamicContent">
+        
+        <!-- Vista Panoramica (Default) -->
+        <div id="viewOverview" class="dashboard-view">
+            <div class="row">
+                <!-- Statistiche per Azienda -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-chart-pie text-primary me-2"></i>
+                            Statistiche per Azienda
+                        </h3>
+                        <div id="companyStatsTable">
+                            <!-- Popolato dinamicamente -->
+                        </div>
+                    </div>
+                </div>
                 
-                {% if stats_per_azienda %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Azienda</th>
-                                    <th class="text-center">Utenti</th>
-                                    <th class="text-center">Test</th>
-                                    <th class="text-center">Test/Utente</th>
-                                    <th class="text-center">Punteggio Medio</th>
-                                    <th class="text-center">Tasso Successo</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for azienda, stats in stats_per_azienda.items() %}
-                                <tr>
-                                    <td>
-                                        {% if azienda == 'auxiell' %}
-                                            {% set badge_color = '#6C757D' %}
-                                        {% elif azienda == 'euxilia' %}
-                                            {% set badge_color = '#4A90C2' %}
-                                        {% elif azienda == 'xva' %}
-                                            {% set badge_color = '#D4AF37' %}
-                                        {% else %}
-                                            {% set badge_color = '#6C757D' %}
-                                        {% endif %}
-                                        
-                                        <span class="badge" style="background-color: {{ badge_color }}">
-                                            {{ azienda|title if azienda else 'N/A' }}
-                                        </span>
-                                    </td>
-                                    <td class="text-center">{{ stats.users|default(0) }}</td>
-                                    <td class="text-center">{{ stats.tests|default(0) }}</td>
-                                    <td class="text-center">
-                                        {% if stats.users and stats.users > 0 %}
-                                            {{ (stats.tests / stats.users)|round(1) }}
-                                        {% else %}
-                                            0
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        {% if stats.average_score is defined %}
-                                            {% set avg_score = stats.average_score %}
-                                            {% if avg_score >= 80 %}
-                                                <span class="badge bg-success">{{ avg_score|round(1) }}%</span>
-                                            {% elif avg_score >= 60 %}
-                                                <span class="badge bg-warning">{{ avg_score|round(1) }}%</span>
-                                            {% else %}
-                                                <span class="badge bg-danger">{{ avg_score|round(1) }}%</span>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        {% if stats.success_rate is defined %}
-                                            {% set success = stats.success_rate %}
-                                            {% if success >= 80 %}
-                                                <span class="badge bg-success">{{ success|round(1) }}%</span>
-                                            {% elif success >= 60 %}
-                                                <span class="badge bg-warning">{{ success|round(1) }}%</span>
-                                            {% else %}
-                                                <span class="badge bg-danger">{{ success|round(1) }}%</span>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <!-- Test Recenti -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-clock text-warning me-2"></i>
+                            Test Recenti
+                        </h3>
+                        <div id="recentTestsList">
+                            <!-- Popolato dinamicamente -->
+                        </div>
                     </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Nessun dato disponibile</p>
-                    </div>
-                {% endif %}
+                </div>
             </div>
         </div>
         
-        <!-- Test Recenti -->
-        <div class="col-md-6">
-            <div class="dashboard-card">
-                <h3 class="mb-3">
-                    <i class="fas fa-clock text-warning me-2"></i>
-                    Test Recenti
-                </h3>
-                
-                {% if recent_tests %}
-                    <div class="list-group list-group-flush">
-                        {% for test in recent_tests %}
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1">{{ test.user_name|default('N/A') }}</h6>
-                                        <p class="mb-1 small">{{ test.test_name|default('Test Sconosciuto') }}</p>
-                                        <small class="text-muted">
-                                            <i class="fas fa-calendar me-1"></i>
-                                            {% if test.completed_at %}
-                                                {% if 'T' in test.completed_at %}
-                                                    {{ test.completed_at.split('T')[0] }}
-                                                {% else %}
-                                                    {{ test.completed_at }}
-                                                {% endif %}
-                                            {% else %}
-                                                N/A
-                                            {% endif %}
-                                            <span class="ms-2">
-                                                <i class="fas fa-building me-1"></i>
-                                                {{ test.azienda|title if test.azienda else 'N/A' }}
-                                            </span>
-                                        </small>
-                                    </div>
-                                    <div class="text-end">
-                                        {% set score = test.score|default(0) %}
-                                        {% if score >= 80 %}
-                                            {% set badge_class = 'success' %}
-                                        {% elif score >= 60 %}
-                                            {% set badge_class = 'warning' %}
-                                        {% else %}
-                                            {% set badge_class = 'danger' %}
-                                        {% endif %}
-                                        
-                                        <span class="badge bg-{{ badge_class }} fs-6">
-                                            {{ score }}%
-                                        </span>
-                                        <br>
-                                        <small class="text-muted">
-                                            {{ test.correct_answers|default(0) }}/{{ test.total_questions|default(0) }}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
+        <!-- Vista Per Azienda -->
+        <div id="viewByCompany" class="dashboard-view d-none">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-building text-primary me-2"></i>
+                            Analisi Dettagliata per Azienda
+                        </h3>
+                        <div id="companyDetailedAnalysis">
+                            <!-- Grafici e tabelle dettagliate per azienda -->
+                        </div>
                     </div>
-                    
-                    <div class="text-center mt-3">
-                        <small class="text-muted">
-                            Mostrando gli ultimi {{ recent_tests|length }} test completati
-                        </small>
+                </div>
+                <div class="col-md-4">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-chart-bar text-info me-2"></i>
+                            Top Performer
+                        </h3>
+                        <div id="topPerformers">
+                            <!-- Lista top performer -->
+                        </div>
                     </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Nessun test recente</p>
-                    </div>
-                {% endif %}
+                </div>
             </div>
         </div>
+        
+        <!-- Vista Per Tipo Test -->
+        <div id="viewByTest" class="dashboard-view d-none">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-clipboard-list text-success me-2"></i>
+                            Analisi per Tipo di Test
+                        </h3>
+                        <div id="testTypeAnalysis">
+                            <!-- Analisi dettagliata per tipo di test -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vista Timeline -->
+        <div id="viewTimeline" class="dashboard-view d-none">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-chart-line text-warning me-2"></i>
+                            Andamento nel Tempo
+                        </h3>
+                        <div id="timelineChart">
+                            <!-- Grafico timeline -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">Tendenze Mensili</h3>
+                        <div id="monthlyTrends">
+                            <!-- Grafici mensili -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">Confronto Periodi</h3>
+                        <div id="periodComparison">
+                            <!-- Confronto tra periodi -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vista Performance -->
+        <div id="viewPerformance" class="dashboard-view d-none">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-trophy text-danger me-2"></i>
+                            Analisi delle Performance
+                        </h3>
+                        <div id="performanceAnalysis">
+                            <!-- Analisi performance dettagliate -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="dashboard-card">
+                        <h3 class="mb-3">
+                            <i class="fas fa-medal text-gold me-2"></i>
+                            Ranking
+                        </h3>
+                        <div id="rankingList">
+                            <!-- Ranking utenti/aziende -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
     </div>
     
     <!-- Azioni Admin -->
@@ -291,7 +317,7 @@
                 </h3>
                 
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
                                 <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
@@ -304,20 +330,20 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
-                                <i class="fas fa-sync-alt fa-3x text-primary mb-3"></i>
-                                <h5>Sincronizza Dati</h5>
-                                <p class="text-muted">Aggiorna dati da GitHub</p>
-                                <button class="btn btn-primary" onclick="syncData()">
-                                    <i class="fas fa-sync-alt me-1"></i>Sincronizza
+                                <i class="fas fa-database fa-3x text-primary mb-3"></i>
+                                <h5>Stato Azure</h5>
+                                <p class="text-muted">Verifica connessione Azure Tables</p>
+                                <button class="btn btn-primary" onclick="checkAzureStatus()">
+                                    <i class="fas fa-check-circle me-1"></i>Verifica
                                 </button>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
                                 <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
@@ -329,6 +355,19 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-sync-alt fa-3x text-warning mb-3"></i>
+                                <h5>Aggiorna Dati</h5>
+                                <p class="text-muted">Ricarica statistiche</p>
+                                <button class="btn btn-warning" onclick="refreshData()">
+                                    <i class="fas fa-sync-alt me-1"></i>Aggiorna
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -337,50 +376,398 @@
     <!-- Alert Container per notifiche dinamiche -->
     <div id="alertContainer" class="position-fixed" style="top: 20px; right: 20px; z-index: 9999;"></div>
 </div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="d-none position-fixed w-100 h-100" style="top: 0; left: 0; background: rgba(0,0,0,0.5); z-index: 10000;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="text-center text-white">
+            <div class="spinner-border mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+            <h4>Caricamento dati...</h4>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Funzione migliorata per la sincronizzazione
-async function syncData() {
-    const btn = document.querySelector('button[onclick="syncData()"]');
-    if (!btn) return;
+// Dati globali
+let allData = {
+    users: {},
+    testResults: [],
+    filteredData: []
+};
+
+// Inizializzazione
+document.addEventListener('DOMContentLoaded', function() {
+    loadInitialData();
+    populateTestFilters();
+});
+
+// Carica dati iniziali
+async function loadInitialData() {
+    showLoading(true);
+    try {
+        // Carica dati dal server (usando i dati passati dal template)
+        allData.users = {{ stats_per_azienda|tojson if stats_per_azienda else '{}' }};
+        allData.testResults = {{ recent_tests|tojson if recent_tests else '[]' }};
+        allData.filteredData = allData.testResults;
+        
+        // Popola la vista iniziale
+        updateOverviewView();
+        
+    } catch (error) {
+        console.error('Errore caricamento dati:', error);
+        showAlert('Errore nel caricamento dei dati', 'danger');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Popola filtri test dinamicamente
+function populateTestFilters() {
+    const testFilter = document.getElementById('filterTest');
+    const uniqueTests = [...new Set(allData.testResults.map(test => test.test_name))];
     
+    uniqueTests.forEach(testName => {
+        if (testName) {
+            const option = document.createElement('option');
+            option.value = testName;
+            option.textContent = testName;
+            testFilter.appendChild(option);
+        }
+    });
+}
+
+// Applica filtri
+function applyFilters() {
+    const azienda = document.getElementById('filterAzienda').value;
+    const test = document.getElementById('filterTest').value;
+    const periodo = document.getElementById('filterPeriodo').value;
+    
+    let filtered = allData.testResults;
+    
+    // Filtro azienda
+    if (azienda) {
+        filtered = filtered.filter(item => item.azienda === azienda);
+    }
+    
+    // Filtro test
+    if (test) {
+        filtered = filtered.filter(item => item.test_name === test);
+    }
+    
+    // Filtro periodo
+    if (periodo) {
+        const daysAgo = parseInt(periodo);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+        
+        filtered = filtered.filter(item => {
+            if (item.completed_at) {
+                const testDate = new Date(item.completed_at);
+                return testDate >= cutoffDate;
+            }
+            return false;
+        });
+    }
+    
+    allData.filteredData = filtered;
+    updateCurrentView();
+}
+
+// Cambia vista
+function changeView() {
+    const vista = document.getElementById('filterVista').value;
+    
+    // Nascondi tutte le viste
+    document.querySelectorAll('.dashboard-view').forEach(view => {
+        view.classList.add('d-none');
+    });
+    
+    // Mostra vista selezionata
+    const targetView = document.getElementById('view' + capitalizeFirst(vista.replace('-', '')));
+    if (targetView) {
+        targetView.classList.remove('d-none');
+    }
+    
+    // Aggiorna contenuto della vista
+    updateCurrentView();
+}
+
+// Aggiorna vista corrente
+function updateCurrentView() {
+    const vista = document.getElementById('filterVista').value;
+    
+    switch(vista) {
+        case 'overview':
+            updateOverviewView();
+            break;
+        case 'by-company':
+            updateCompanyView();
+            break;
+        case 'by-test':
+            updateTestView();
+            break;
+        case 'timeline':
+            updateTimelineView();
+            break;
+        case 'performance':
+            updatePerformanceView();
+            break;
+    }
+    
+    updateStatsOverview();
+}
+
+// Aggiorna statistiche overview
+function updateStatsOverview() {
+    const data = allData.filteredData;
+    
+    // Calcola statistiche filtrate
+    const uniqueUsers = [...new Set(data.map(test => test.user_email))].length;
+    const totalTests = data.length;
+    const scores = data.map(test => test.score || 0).filter(score => score > 0);
+    const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+    const successRate = scores.length ? ((scores.filter(score => score >= 60).length / scores.length) * 100).toFixed(1) : 0;
+    const testsPerUser = uniqueUsers ? (totalTests / uniqueUsers).toFixed(1) : 0;
+    
+    // Aggiorna DOM
+    document.getElementById('totalUsers').textContent = uniqueUsers;
+    document.getElementById('totalTests').textContent = totalTests;
+    document.getElementById('avgScore').textContent = avgScore + '%';
+    document.getElementById('successRate').textContent = successRate + '%';
+    document.getElementById('testsPerUser').textContent = testsPerUser;
+}
+
+// Vista Overview
+function updateOverviewView() {
+    updateCompanyStatsTable();
+    updateRecentTestsList();
+}
+
+// Aggiorna tabella statistiche aziende
+function updateCompanyStatsTable() {
+    const container = document.getElementById('companyStatsTable');
+    const data = allData.filteredData;
+    
+    // Raggruppa per azienda
+    const byCompany = {};
+    data.forEach(test => {
+        const company = test.azienda || 'Unknown';
+        if (!byCompany[company]) {
+            byCompany[company] = {
+                tests: 0,
+                users: new Set(),
+                scores: []
+            };
+        }
+        byCompany[company].tests++;
+        byCompany[company].users.add(test.user_email);
+        if (test.score) byCompany[company].scores.push(test.score);
+    });
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Azienda</th>
+                        <th class="text-center">Utenti</th>
+                        <th class="text-center">Test</th>
+                        <th class="text-center">Punteggio Medio</th>
+                        <th class="text-center">Tasso Successo</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    Object.entries(byCompany).forEach(([company, stats]) => {
+        const avgScore = stats.scores.length ? (stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length).toFixed(1) : 0;
+        const successRate = stats.scores.length ? ((stats.scores.filter(s => s >= 60).length / stats.scores.length) * 100).toFixed(1) : 0;
+        
+        const badgeColor = company === 'auxiell' ? '#6C757D' : 
+                          company === 'euxilia' ? '#4A90C2' : 
+                          company === 'xva' ? '#D4AF37' : '#6C757D';
+        
+        html += `
+            <tr>
+                <td><span class="badge" style="background-color: ${badgeColor}">${company.charAt(0).toUpperCase() + company.slice(1)}</span></td>
+                <td class="text-center">${stats.users.size}</td>
+                <td class="text-center">${stats.tests}</td>
+                <td class="text-center">
+                    <span class="badge ${avgScore >= 80 ? 'bg-success' : avgScore >= 60 ? 'bg-warning' : 'bg-danger'}">${avgScore}%</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${successRate >= 80 ? 'bg-success' : successRate >= 60 ? 'bg-warning' : 'bg-danger'}">${successRate}%</span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+}
+
+// Aggiorna lista test recenti
+function updateRecentTestsList() {
+    const container = document.getElementById('recentTestsList');
+    const data = allData.filteredData.slice(0, 10); // Solo ultimi 10
+    
+    if (data.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Nessun test trovato</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="list-group list-group-flush">';
+    
+    data.forEach(test => {
+        const score = test.score || 0;
+        const badgeClass = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
+        const date = test.completed_at ? test.completed_at.split('T')[0] : 'N/A';
+        
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${test.user_name || 'N/A'}</h6>
+                        <p class="mb-1 small">${test.test_name || 'Test Sconosciuto'}</p>
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>${date}
+                            <span class="ms-2">
+                                <i class="fas fa-building me-1"></i>${test.azienda || 'N/A'}
+                            </span>
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-${badgeClass} fs-6">${score}%</span>
+                        <br>
+                        <small class="text-muted">${test.correct_answers || 0}/${test.total_questions || 0}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Vista per azienda
+function updateCompanyView() {
+    // Implementa analisi dettagliata per azienda
+    const container = document.getElementById('companyDetailedAnalysis');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Analisi dettagliata per azienda in sviluppo...</p>
+        </div>
+    `;
+}
+
+// Vista per tipo test
+function updateTestView() {
+    // Implementa analisi per tipo di test
+    const container = document.getElementById('testTypeAnalysis');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Analisi per tipo di test in sviluppo...</p>
+        </div>
+    `;
+}
+
+// Vista timeline
+function updateTimelineView() {
+    // Implementa vista timeline
+    const container = document.getElementById('timelineChart');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Grafici timeline in sviluppo...</p>
+        </div>
+    `;
+}
+
+// Vista performance
+function updatePerformanceView() {
+    // Implementa analisi performance
+    const container = document.getElementById('performanceAnalysis');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Analisi performance in sviluppo...</p>
+        </div>
+    `;
+}
+
+// Funzioni utility
+function capitalizeFirst(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (show) {
+        overlay.classList.remove('d-none');
+    } else {
+        overlay.classList.add('d-none');
+    }
+}
+
+// Verifica stato Azure
+async function checkAzureStatus() {
+    const btn = event.target;
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizzando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Verificando...';
     btn.disabled = true;
     
     try {
-        const response = await fetch('/sync', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
+        const response = await fetch('/admin/azure-status');
         const data = await response.json();
         
-        if (data.success) {
+        if (data.status === 'healthy') {
             showAlert(`
-                <strong>Sincronizzazione completata!</strong><br>
-                <small>Utenti: ${data.users_count || 0} | Risultati: ${data.results_count || 0}</small>
+                <strong>Azure Status: OK</strong><br>
+                <small>Utenti: ${data.record_counts?.users || 0} | Risultati: ${data.record_counts?.results || 0}</small>
             `, 'success');
-            
-            // Ricarica la pagina dopo 2 secondi
-            setTimeout(() => location.reload(), 2000);
         } else {
-            showAlert(`<strong>Errore durante la sincronizzazione:</strong><br>${data.error || 'Errore sconosciuto'}`, 'danger');
+            showAlert(`<strong>Azure Status: Errore</strong><br>${data.error || 'Stato sconosciuto'}`, 'warning');
         }
     } catch (error) {
-        console.error('Sync error:', error);
-        showAlert(`<strong>Errore di connessione:</strong><br>${error.message}`, 'danger');
+        showAlert(`<strong>Errore verifica Azure:</strong><br>${error.message}`, 'danger');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
+    }
+}
+
+// Aggiorna dati
+async function refreshData() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Aggiornando...';
+    btn.disabled = true;
+    
+    try {
+        showLoading(true);
+        
+        // Ricarica la pagina per ottenere dati freschi
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+        
+        showAlert('Dati aggiornati con successo!', 'success');
+        
+    } catch (error) {
+        showAlert(`<strong>Errore aggiornamento:</strong><br>${error.message}`, 'danger');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showLoading(false);
     }
 }
 
@@ -413,19 +800,484 @@ function removeAlert(alertId) {
     }
 }
 
-// Test della connettività all'avvio
-document.addEventListener('DOMContentLoaded', function() {
-    // Check health status
-    fetch('/health')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status !== 'healthy') {
-                showAlert('<strong>Attenzione:</strong> Alcuni servizi potrebbero non funzionare correttamente.', 'warning');
+// Implementazioni avanzate delle viste
+
+// Vista dettagliata per azienda
+function updateCompanyView() {
+    const container = document.getElementById('companyDetailedAnalysis');
+    const data = allData.filteredData;
+    
+    // Raggruppa per azienda
+    const byCompany = {};
+    data.forEach(test => {
+        const company = test.azienda || 'Unknown';
+        if (!byCompany[company]) {
+            byCompany[company] = {
+                tests: [],
+                users: new Set(),
+                testTypes: new Set()
+            };
+        }
+        byCompany[company].tests.push(test);
+        byCompany[company].users.add(test.user_email);
+        byCompany[company].testTypes.add(test.test_name);
+    });
+    
+    let html = '<div class="row">';
+    
+    Object.entries(byCompany).forEach(([company, stats]) => {
+        const scores = stats.tests.map(t => t.score || 0).filter(s => s > 0);
+        const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+        const successRate = scores.length ? ((scores.filter(s => s >= 60).length / scores.length) * 100).toFixed(1) : 0;
+        const completionRate = stats.users.size > 0 ? ((stats.tests.length / stats.users.size).toFixed(1)) : 0;
+        
+        const badgeColor = company === 'auxiell' ? '#6C757D' : 
+                          company === 'euxilia' ? '#4A90C2' : 
+                          company === 'xva' ? '#D4AF37' : '#6C757D';
+        
+        html += `
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header" style="background-color: ${badgeColor}; color: white;">
+                        <h5 class="mb-0">
+                            <i class="fas fa-building me-2"></i>
+                            ${company.charAt(0).toUpperCase() + company.slice(1)}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <h4 class="text-primary">${stats.users.size}</h4>
+                                    <small class="text-muted">Utenti Attivi</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h4 class="text-success">${stats.tests.length}</h4>
+                                <small class="text-muted">Test Completati</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Punteggio Medio:</strong>
+                                <span class="badge ${avgScore >= 80 ? 'bg-success' : avgScore >= 60 ? 'bg-warning' : 'bg-danger'} float-end">
+                                    ${avgScore}%
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Tasso Successo:</strong>
+                                <span class="badge ${successRate >= 80 ? 'bg-success' : successRate >= 60 ? 'bg-warning' : 'bg-danger'} float-end">
+                                    ${successRate}%
+                                </span>
+                            </div>
+                        </div>
+                        <hr>
+                        <div>
+                            <strong>Tipi di Test:</strong>
+                            <div class="mt-2">
+                                ${Array.from(stats.testTypes).map(testType => 
+                                    `<span class="badge bg-secondary me-1">${testType}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // Aggiorna Top Performers
+    updateTopPerformers();
+}
+
+// Top performers
+function updateTopPerformers() {
+    const container = document.getElementById('topPerformers');
+    const data = allData.filteredData;
+    
+    // Raggruppa per utente
+    const byUser = {};
+    data.forEach(test => {
+        const email = test.user_email;
+        if (!byUser[email]) {
+            byUser[email] = {
+                name: test.user_name || 'Unknown',
+                azienda: test.azienda,
+                tests: [],
+                totalScore: 0,
+                avgScore: 0
+            };
+        }
+        byUser[email].tests.push(test);
+        byUser[email].totalScore += (test.score || 0);
+    });
+    
+    // Calcola medie e ordina
+    const performers = Object.values(byUser).map(user => {
+        user.avgScore = user.tests.length ? (user.totalScore / user.tests.length) : 0;
+        return user;
+    }).sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
+    
+    let html = '<div class="list-group list-group-flush">';
+    
+    performers.forEach((user, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+        const badgeClass = user.avgScore >= 80 ? 'success' : user.avgScore >= 60 ? 'warning' : 'danger';
+        
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="me-2">${medal}</span>
+                        <strong>${user.name}</strong>
+                        <br>
+                        <small class="text-muted">
+                            ${user.azienda} • ${user.tests.length} test
+                        </small>
+                    </div>
+                    <span class="badge bg-${badgeClass} fs-6">
+                        ${user.avgScore.toFixed(1)}%
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Vista per tipo di test
+function updateTestView() {
+    const container = document.getElementById('testTypeAnalysis');
+    const data = allData.filteredData;
+    
+    // Raggruppa per tipo di test
+    const byTest = {};
+    data.forEach(test => {
+        const testType = test.test_name || 'Unknown';
+        if (!byTest[testType]) {
+            byTest[testType] = {
+                tests: [],
+                users: new Set(),
+                companies: new Set()
+            };
+        }
+        byTest[testType].tests.push(test);
+        byTest[testType].users.add(test.user_email);
+        byTest[testType].companies.add(test.azienda);
+    });
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tipo Test</th>
+                        <th class="text-center">Completamenti</th>
+                        <th class="text-center">Utenti Unici</th>
+                        <th class="text-center">Aziende</th>
+                        <th class="text-center">Punteggio Medio</th>
+                        <th class="text-center">Difficoltà</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    Object.entries(byTest).forEach(([testType, stats]) => {
+        const scores = stats.tests.map(t => t.score || 0).filter(s => s > 0);
+        const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+        const difficulty = avgScore >= 80 ? 'Facile' : avgScore >= 60 ? 'Medio' : 'Difficile';
+        const difficultyClass = avgScore >= 80 ? 'success' : avgScore >= 60 ? 'warning' : 'danger';
+        
+        html += `
+            <tr>
+                <td>
+                    <strong>${testType}</strong>
+                    <br>
+                    <small class="text-muted">
+                        ${Math.round((stats.tests.length / stats.users.size) * 10) / 10} tentativi per utente
+                    </small>
+                </td>
+                <td class="text-center">${stats.tests.length}</td>
+                <td class="text-center">${stats.users.size}</td>
+                <td class="text-center">${stats.companies.size}</td>
+                <td class="text-center">
+                    <span class="badge ${avgScore >= 80 ? 'bg-success' : avgScore >= 60 ? 'bg-warning' : 'bg-danger'}">
+                        ${avgScore}%
+                    </span>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-${difficultyClass}">
+                        ${difficulty}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody></table></div>`;
+    
+    // Aggiungi grafico distribuzione punteggi
+    html += `
+        <div class="mt-4">
+            <h5>Distribuzione Punteggi per Test</h5>
+            <div id="scoreDistributionChart" style="height: 300px;">
+                <!-- Qui potrai integrare Chart.js o D3.js per grafici -->
+                <div class="text-center py-4 bg-light rounded">
+                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Grafico distribuzione punteggi<br><small>Integrabile con Chart.js</small></p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Vista timeline
+function updateTimelineView() {
+    const container = document.getElementById('timelineChart');
+    const monthlyContainer = document.getElementById('monthlyTrends');
+    const comparisonContainer = document.getElementById('periodComparison');
+    const data = allData.filteredData;
+    
+    // Raggruppa per data
+    const byDate = {};
+    data.forEach(test => {
+        if (test.completed_at) {
+            const date = test.completed_at.split('T')[0];
+            if (!byDate[date]) {
+                byDate[date] = {
+                    count: 0,
+                    scores: [],
+                    users: new Set()
+                };
             }
-        })
-        .catch(error => {
-            console.warn('Health check failed:', error);
-        });
-});
+            byDate[date].count++;
+            byDate[date].scores.push(test.score || 0);
+            byDate[date].users.add(test.user_email);
+        }
+    });
+    
+    // Timeline principale
+    const sortedDates = Object.keys(byDate).sort();
+    let timelineHtml = `
+        <div class="row">
+            <div class="col-12">
+                <h5>Attività Giornaliera</h5>
+                <div style="height: 300px;" class="bg-light rounded p-3">
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Grafico timeline attività<br><small>Integrabile con Chart.js</small></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <h5>Riepilogo Cronologico</h5>
+            <div class="timeline-container" style="max-height: 400px; overflow-y: auto;">
+    `;
+    
+    sortedDates.slice(-10).reverse().forEach(date => {
+        const dayData = byDate[date];
+        const avgScore = dayData.scores.length ? 
+            (dayData.scores.reduce((a, b) => a + b, 0) / dayData.scores.length).toFixed(1) : 0;
+        
+        timelineHtml += `
+            <div class="border-start border-primary border-3 ps-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${new Date(date).toLocaleDateString('it-IT')}</h6>
+                        <small class="text-muted">
+                            ${dayData.count} test • ${dayData.users.size} utenti • Media: ${avgScore}%
+                        </small>
+                    </div>
+                    <span class="badge ${avgScore >= 80 ? 'bg-success' : avgScore >= 60 ? 'bg-warning' : 'bg-danger'}">
+                        ${avgScore}%
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+    
+    timelineHtml += '</div></div>';
+    container.innerHTML = timelineHtml;
+    
+    // Tendenze mensili
+    monthlyContainer.innerHTML = `
+        <div style="height: 250px;" class="bg-light rounded p-3">
+            <div class="text-center py-4">
+                <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Tendenze mensili<br><small>Integrabile con Chart.js</small></p>
+            </div>
+        </div>
+    `;
+    
+    // Confronto periodi
+    comparisonContainer.innerHTML = `
+        <div style="height: 250px;" class="bg-light rounded p-3">
+            <div class="text-center py-4">
+                <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Confronto periodi<br><small>Settimana vs Mese precedente</small></p>
+            </div>
+        </div>
+    `;
+}
+
+// Vista performance
+function updatePerformanceView() {
+    const container = document.getElementById('performanceAnalysis');
+    const rankingContainer = document.getElementById('rankingList');
+    const data = allData.filteredData;
+    
+    // Analisi performance dettagliata
+    const scores = data.map(test => test.score || 0).filter(s => s > 0);
+    const stats = {
+        total: scores.length,
+        excellent: scores.filter(s => s >= 90).length,
+        good: scores.filter(s => s >= 80 && s < 90).length,
+        satisfactory: scores.filter(s => s >= 60 && s < 80).length,
+        needsImprovement: scores.filter(s => s < 60).length,
+        average: scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0
+    };
+    
+    let performanceHtml = `
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Distribuzione Performance</h5>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Eccellente (90-100%)</span>
+                        <span class="badge bg-success">${stats.excellent}</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: ${(stats.excellent / stats.total * 100)}%"></div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Buono (80-89%)</span>
+                        <span class="badge bg-info">${stats.good}</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar bg-info" style="width: ${(stats.good / stats.total * 100)}%"></div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Sufficiente (60-79%)</span>
+                        <span class="badge bg-warning">${stats.satisfactory}</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar bg-warning" style="width: ${(stats.satisfactory / stats.total * 100)}%"></div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Da Migliorare (&lt;60%)</span>
+                        <span class="badge bg-danger">${stats.needsImprovement}</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar bg-danger" style="width: ${(stats.needsImprovement / stats.total * 100)}%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h5>Metriche Chiave</h5>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="card bg-primary text-white mb-3">
+                            <div class="card-body">
+                                <h3>${stats.average}%</h3>
+                                <small>Punteggio Medio</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card bg-success text-white mb-3">
+                            <div class="card-body">
+                                <h3>${((stats.excellent + stats.good) / stats.total * 100).toFixed(1)}%</h3>
+                                <small>Performance Ottima</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card bg-warning text-white mb-3">
+                            <div class="card-body">
+                                <h3>${(stats.satisfactory / stats.total * 100).toFixed(1)}%</h3>
+                                <small>Performance Media</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card bg-danger text-white mb-3">
+                            <div class="card-body">
+                                <h3>${(stats.needsImprovement / stats.total * 100).toFixed(1)}%</h3>
+                                <small>Necessita Supporto</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = performanceHtml;
+    
+    // Ranking completo
+    const byUser = {};
+    data.forEach(test => {
+        const email = test.user_email;
+        if (!byUser[email]) {
+            byUser[email] = {
+                name: test.user_name || 'Unknown',
+                azienda: test.azienda,
+                tests: [],
+                totalScore: 0,
+                avgScore: 0
+            };
+        }
+        byUser[email].tests.push(test);
+        byUser[email].totalScore += (test.score || 0);
+    });
+    
+    const ranking = Object.values(byUser).map(user => {
+        user.avgScore = user.tests.length ? (user.totalScore / user.tests.length) : 0;
+        return user;
+    }).sort((a, b) => b.avgScore - a.avgScore);
+    
+    let rankingHtml = `
+        <div style="max-height: 500px; overflow-y: auto;">
+            <h5>Ranking Completo</h5>
+    `;
+    
+    ranking.forEach((user, index) => {
+        const badgeClass = user.avgScore >= 80 ? 'success' : user.avgScore >= 60 ? 'warning' : 'danger';
+        const position = index + 1;
+        const medal = position <= 3 ? (position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉') : `#${position}`;
+        
+        rankingHtml += `
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div class="d-flex align-items-center">
+                    <span class="me-3" style="min-width: 40px;">${medal}</span>
+                    <div>
+                        <strong>${user.name}</strong>
+                        <br>
+                        <small class="text-muted">${user.azienda} • ${user.tests.length} test</small>
+                    </div>
+                </div>
+                <span class="badge bg-${badgeClass} fs-6">
+                    ${user.avgScore.toFixed(1)}%
+                </span>
+            </div>
+        `;
+    });
+    
+    rankingHtml += '</div>';
+    rankingContainer.innerHTML = rankingHtml;
+}
 </script>
 {% endblock %}
