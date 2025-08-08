@@ -8,7 +8,7 @@
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1><i class="fas fa-shield-alt me-2"></i>Dashboard Amministrativa</h1>
+                <h1><i class="fas fa-shield-alt me-2"></i>Dashboard Amministratore</h1>
                 <div>
                     <a href="{{ url_for('admin_download_report') }}" class="btn btn-success btn-lg">
                         <i class="fas fa-download me-2"></i>Scarica Report Completo
@@ -21,8 +21,6 @@
     <!-- Alert Admin -->
     <div class="alert alert-info mb-4">
         <i class="fas fa-info-circle me-2"></i>
-        <strong>Modalità Amministratore</strong> - Hai accesso a tutti i dati e statistiche del sistema.
-        <small class="d-block mt-1">Sistema Azure Tables - Dati Persistenti</small>
     </div>
     
     <!-- Filtri Dinamici -->
@@ -40,7 +38,7 @@
                                 <option value="">Tutte le Aziende</option>
                                 <option value="auxiell">auxiell</option>
                                 <option value="euxilia">euxilia</option>
-                                <option value="xva">xva services</option>
+                                <option value="xva">xva</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -85,7 +83,7 @@
     
     <!-- Statistiche Generali -->
     <div class="row mb-4" id="statsOverview">
-        <div class="col-md-2">
+        <div class="col-md-2 offset-md-1">
             <div class="card text-center h-100 border-primary bg-white">
                 <div class="card-body">
                     <i class="fas fa-users fa-2x text-primary mb-2"></i>
@@ -146,15 +144,6 @@
                             0
                         {% endif %}
                     </h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="card text-center h-100 border-dark bg-white">
-                <div class="card-body">
-                    <i class="fas fa-building fa-2x text-dark mb-2"></i>
-                    <h6 class="card-title text-dark mb-1">Aziende Attive</h6>
-                    <h3 class="text-dark mb-0" id="activeCompanies">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</h3>
                 </div>
             </div>
         </div>
@@ -349,7 +338,7 @@
             <div class="dashboard-card">
                 <h3 class="mb-3">
                     <i class="fas fa-tools text-info me-2"></i>
-                    Azioni Amministrative
+                    Azioni Amministratore
                 </h3>
                 
                 <div class="row">
