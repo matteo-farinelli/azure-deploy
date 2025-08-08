@@ -86,87 +86,75 @@
     <!-- Statistiche Generali -->
     <div class="row mb-4" id="statsOverview">
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Utenti Totali</h5>
-                        <div class="stats-number" id="totalUsers">{{ total_users|default(0) }}</div>
-                    </div>
-                    <i class="fas fa-users fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-primary">
+                <div class="card-body">
+                    <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                    <h6 class="card-title text-muted">Utenti Totali</h6>
+                    <h3 class="text-primary" id="totalUsers">{{ total_users|default(0) }}</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Test Completati</h5>
-                        <div class="stats-number" id="totalTests">{{ total_tests|default(0) }}</div>
-                    </div>
-                    <i class="fas fa-clipboard-check fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-success">
+                <div class="card-body">
+                    <i class="fas fa-clipboard-check fa-2x text-success mb-2"></i>
+                    <h6 class="card-title text-muted">Test Completati</h6>
+                    <h3 class="text-success" id="totalTests">{{ total_tests|default(0) }}</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Punteggio Medio</h5>
-                        <div class="stats-number" id="avgScore">
-                            {% if average_score is defined %}
-                                {{ average_score|round(1) }}%
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </div>
-                    </div>
-                    <i class="fas fa-trophy fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-warning">
+                <div class="card-body">
+                    <i class="fas fa-trophy fa-2x text-warning mb-2"></i>
+                    <h6 class="card-title text-muted">Punteggio Medio</h6>
+                    <h3 class="text-warning" id="avgScore">
+                        {% if average_score is defined %}
+                            {{ average_score|round(1) }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </h3>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Tasso Successo</h5>
-                        <div class="stats-number" id="successRate">
-                            {% if success_rate is defined %}
-                                {{ success_rate|round(1) }}%
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">≥ 60%</small>
-                    </div>
-                    <i class="fas fa-medal fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-info">
+                <div class="card-body">
+                    <i class="fas fa-medal fa-2x text-info mb-2"></i>
+                    <h6 class="card-title text-muted">Tasso Successo</h6>
+                    <h3 class="text-info" id="successRate">
+                        {% if success_rate is defined %}
+                            {{ success_rate|round(1) }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">≥ 60%</small>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Test/Utente</h5>
-                        <div class="stats-number" id="testsPerUser">
-                            {% if total_users and total_users > 0 %}
-                                {{ (total_tests / total_users)|round(1) }}
-                            {% else %}
-                                0
-                            {% endif %}
-                        </div>
-                    </div>
-                    <i class="fas fa-chart-bar fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-secondary">
+                <div class="card-body">
+                    <i class="fas fa-chart-bar fa-2x text-secondary mb-2"></i>
+                    <h6 class="card-title text-muted">Test/Utente</h6>
+                    <h3 class="text-secondary" id="testsPerUser">
+                        {% if total_users and total_users > 0 %}
+                            {{ (total_tests / total_users)|round(1) }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </h3>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5>Aziende Attive</h5>
-                        <div class="stats-number" id="activeCompanies">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</div>
-                    </div>
-                    <i class="fas fa-building fa-3x opacity-50"></i>
+            <div class="card text-center h-100 border-dark">
+                <div class="card-body">
+                    <i class="fas fa-building fa-2x text-dark mb-2"></i>
+                    <h6 class="card-title text-muted">Aziende Attive</h6>
+                    <h3 class="text-dark" id="activeCompanies">{{ stats_per_azienda|length if stats_per_azienda else 0 }}</h3>
                 </div>
             </div>
         </div>
@@ -1734,19 +1722,20 @@ changeView = function() {
 </script>
 
 <style>
-.stats-card {
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    border-left: 4px solid #007bff;
+/* CSS aggiornato */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.stats-number {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #007bff;
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.card-body {
+    padding: 1.5rem;
 }
 
 .dashboard-card {
@@ -1786,10 +1775,6 @@ changeView = function() {
     font-size: 0.85em;
 }
 
-.card-header {
-    border-radius: 10px 10px 0 0 !important;
-}
-
 .table th {
     border-top: none;
     font-weight: 600;
@@ -1810,19 +1795,18 @@ changeView = function() {
     color: #D4AF37 !important;
 }
 
-/* Responsive charts */
+/* Responsive */
 @media (max-width: 768px) {
-    .stats-card {
-        margin-bottom: 15px;
-        padding: 15px;
-    }
-    
-    .stats-number {
-        font-size: 1.5rem;
+    .card-body {
+        padding: 1rem;
     }
     
     .dashboard-card {
         padding: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .col-md-2 {
         margin-bottom: 15px;
     }
 }
@@ -1861,4 +1845,3 @@ canvas {
 }
 </style>
 {% endblock %}
-        
