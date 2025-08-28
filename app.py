@@ -216,44 +216,6 @@ def not_found_error(error):
     logger.warning(f"404 error: {request.url}")
     return render_template('error.html', error='Pagina non trovata'), 404
 
-@app.route('/hash-generator', methods=['GET', 'POST'])
-def hash_generator():
-    """Generatore hash password semplificato"""
-    try:
-        if request.method == 'POST':
-            password = request.form.get('password', '').strip()
-            
-            if password:
-                password_hash = hash_password(password)
-                return f"""
-                <html>
-                <body style="font-family: Arial; padding: 20px;">
-                    <h2>Hash Generato</h2>
-                    <p><strong>Password:</strong> {password}</p>
-                    <p><strong>Hash:</strong></p>
-                    <textarea style="width:100%; height:100px; font-family:monospace;">{password_hash}</textarea>
-                    <br><br>
-                    <a href="/hash-generator">Genera Nuovo Hash</a>
-                </body>
-                </html>
-                """
-        
-        # Form GET
-        return """
-        <html>
-        <body style="font-family: Arial; padding: 20px;">
-            <h2>Password Hash Generator</h2>
-            <form method="POST">
-                <input type="password" name="password" placeholder="Inserisci password" required style="padding: 10px; font-size: 16px;">
-                <br><br>
-                <button type="submit" style="padding: 10px 20px; font-size: 16px;">Genera Hash</button>
-            </form>
-        </body>
-        </html>
-        """
-        
-    except Exception as e:
-        return f"Errore: {str(e)}", 500
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"500 error: {error}")
