@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy - Assessment App{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="dashboard-card">
+                <h1>Informativa Privacy (GDPR)</h1>
+                
+                <h2>1. Titolare del Trattamento</h2>
+                <p>Auxiell Group<br>
+                Email: privacy@auxiell.com<br>
+                Data Protection Officer: dpo@auxiell.com</p>
+                
+                <h2>2. Dati Personali Trattati</h2>
+                <ul>
+                    <li><strong>Dati identificativi:</strong> nome, cognome, email aziendale</li>
+                    <li><strong>Dati di navigazione:</strong> indirizzo IP, sessioni, log di accesso</li>
+                    <li><strong>Dati sui test:</strong> risposte, punteggi, date di completamento</li>
+                </ul>
+                
+                <h2>3. Finalità del Trattamento</h2>
+                <ul>
+                    <li>Gestione account utente e autenticazione</li>
+                    <li>Somministrazione e valutazione dei test</li>
+                    <li>Generazione di report e statistiche aziendali</li>
+                    <li>Sicurezza del sistema</li>
+                </ul>
+                
+                <h2>4. Base Giuridica</h2>
+                <p>Il trattamento è basato su:</p>
+                <ul>
+                    <li>Consenso dell'interessato (art. 6.1.a GDPR)</li>
+                    <li>Interesse legittimo del titolare per finalità di valutazione aziendale (art. 6.1.f GDPR)</li>
+                </ul>
+                
+                <h2>5. Conservazione dei Dati</h2>
+                <ul>
+                    <li><strong>Dati account:</strong> fino alla cancellazione dell'account</li>
+                    <li><strong>Risultati test:</strong> 2 anni dalla data di completamento</li>
+                    <li><strong>Log di sistema:</strong> 12 mesi</li>
+                </ul>
+                
+                <h2>6. I Tuoi Diritti</h2>
+                <p>Ai sensi del GDPR hai diritto a:</p>
+                <ul>
+                    <li>Accesso ai tuoi dati personali</li>
+                    <li>Rettifica dei dati inesatti</li>
+                    <li>Cancellazione dei dati</li>
+                    <li>Limitazione del trattamento</li>
+                    <li>Portabilità dei dati</li>
+                    <li>Opposizione al trattamento</li>
+                </ul>
+                
+                <h2>7. Sicurezza</h2>
+                <p>I dati sono protetti mediante:</p>
+                <ul>
+                    <li>Crittografia in transito e a riposo</li>
+                    <li>Controlli di accesso basati su ruoli</li>
+                    <li>Monitoring e audit log</li>
+                    <li>Infrastruttura Azure con certificazioni di sicurezza</li>
+                </ul>
+                
+                <h2>8. Trasferimenti Internazionali</h2>
+                <p>I dati sono archiviati su Azure West Europe. Non vengono trasferiti al di fuori dell'UE.</p>
+                
+                <h2>9. Contatti</h2>
+                <p>Per esercitare i tuoi diritti o per domande sulla privacy: <strong>privacy@auxiell.com</strong></p>
+                
+                <p><small>Ultimo aggiornamento: Agosto 2025</small></p>
+                
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                        Torna alla Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
