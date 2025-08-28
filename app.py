@@ -216,7 +216,100 @@ def not_found_error(error):
     logger.warning(f"404 error: {request.url}")
     return render_template('error.html', error='Pagina non trovata'), 404
 
+@app.route('/hash-generator', methods=['GET', 'POST'])
+def hash_generator():
+    """Generatore hash password con form"""
+    if request.method == 'POST':
+        password = request.form.get('password', '').strip()
+        
+        if not password:
+            return render_template_string(HASH_FORM_TEMPLATE, 
+                                        error="Inserisci una password")
+        
+        try:
+            password_hash = hash_password(password)
+            return render_template_string(HASH_FORM_TEMPLATE, 
+                                        password=password, 
+                                        hash_result=password_hash)
+        except Exception as e:
+            return render_template_string(HASH_FORM_TEMPLATE, 
+                                        error=f"Errore: {e}")
+    
+    # GET request - mostra form
+    return render_template_string(HASH_FORM_TEMPLATE)
 
+# Template HTML per il form
+HASH_FORM_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Password Hash Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">Password Hash Generator</h4>
+                    </div>
+                    <div class="card-body">
+                        {% if error %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                        {% endif %}
+                        
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label class="form-label">Password da convertire:</label>
+                                <input type="password" class="form-control" name="password" 
+                                       placeholder="Inserisci la password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Genera Hash</button>
+                        </form>
+                        
+                        {% if hash_result %}
+                        <hr>
+                        <h5>Risultato:</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Password inserita:</label>
+                            <div class="bg-light p-2 border rounded">{{ password }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Hash SHA-256:</label>
+                            <div class="bg-light p-2 border rounded" style="word-break: break-all; font-family: monospace;">
+                                {{ hash_result }}
+                            </div>
+                        </div>
+                        <button class="btn btn-success" onclick="copyHash()">Copia Hash</button>
+                        
+                        <hr>
+                        <div class="alert alert-info">
+                            <strong>Istruzioni Azure:</strong><br>
+                            1. Vai su Azure Portal → Storage Account → Tables<br>
+                            2. Apri la tabella "users"<br>
+                            3. Trova l'account admin<br>
+                            4. Modifica il campo "password_hash"<br>
+                            5. Incolla l'hash copiato
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    function copyHash() {
+        const hashText = document.querySelector('div[style*="word-break"] ').textContent.trim();
+        navigator.clipboard.writeText(hashText).then(function() {
+            alert('Hash copiato negli appunti!');
+        });
+    }
+    </script>
+</body>
+</html>
+'''
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"500 error: {error}")
