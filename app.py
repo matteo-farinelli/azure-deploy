@@ -1315,68 +1315,7 @@ def startup_initialization():
         logger.error(f"💥 ERRORE CRITICO INIZIALIZZAZIONE: {e}")
         logger.error("❌ APP NON PUÒ AVVIARSI SENZA AZURE TABLES")
         raise Exception(f"Inizializzazione fallita: {e}")
-'''
-@app.route('/privacy-policy')
-def privacy_policy():
-    return render_template('privacy_policy.html')
 
-@app.route('/data-export')
-@login_required
-def data_export():
-    """Export dati utente per GDPR"""
-    user_email = session.get('user_email')
-    
-    try:
-        # Dati utente
-        user_data = get_user_data(user_email)
-        
-        # Risultati test
-        test_results = get_user_test_results(user_email)
-        
-        # Prepara export completo
-        export_data = {
-            'user_info': {
-                'email': user_data.get('email'),
-                'nome': user_data.get('nome'),
-                'cognome': user_data.get('cognome'),
-                'azienda': user_data.get('azienda'),
-                'created_at': user_data.get('created_at'),
-                'last_login': user_data.get('last_login')
-            },
-            'test_results': test_results,
-            'export_date': datetime.now().isoformat(),
-            'retention_info': {
-                'account_data': 'Conservato fino alla cancellazione account',
-                'test_results': 'Conservato per 2 anni dal completamento',
-                'logs': 'Conservato per 12 mesi'
-            }
-        }
-        
-        # Crea file JSON
-        json_data = json.dumps(export_data, indent=2, ensure_ascii=False)
-        
-        response = make_response(json_data)
-        response.headers['Content-Type'] = 'application/json'
-        response.headers['Content-Disposition'] = f'attachment; filename="dati_personali_{user_email}_{datetime.now().strftime("%Y%m%d")}.json"'
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"Errore export dati: {e}")
-        return render_template('error.html', error='Errore durante l\'export dei dati')
-
-@app.route('/delete-account')
-@login_required
-def delete_account():
-    """Informazioni per cancellazione account GDPR"""
-    return render_template('delete_account.html')
-
-@app.route('/gdpr-request')
-@login_required
-def gdpr_request():
-    """Gestione richieste GDPR"""
-    return render_template('gdpr_request.html')
- '''   
 @app.route('/admin/force-create-tables')
 def force_create_tables():
     """Crea manualmente le tabelle Azure (emergenza)"""
