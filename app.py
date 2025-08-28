@@ -1315,7 +1315,7 @@ def startup_initialization():
         logger.error(f"💥 ERRORE CRITICO INIZIALIZZAZIONE: {e}")
         logger.error("❌ APP NON PUÒ AVVIARSI SENZA AZURE TABLES")
         raise Exception(f"Inizializzazione fallita: {e}")
-
+'''
 @app.route('/privacy-policy')
 def privacy_policy():
     return render_template('privacy_policy.html')
@@ -1376,7 +1376,7 @@ def delete_account():
 def gdpr_request():
     """Gestione richieste GDPR"""
     return render_template('gdpr_request.html')
-    
+ '''   
 @app.route('/admin/force-create-tables')
 def force_create_tables():
     """Crea manualmente le tabelle Azure (emergenza)"""
