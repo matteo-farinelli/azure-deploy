@@ -6,7 +6,7 @@
         <div class="col-md-10">
             <div class="dashboard-card">
                 <h1>Privacy Policy</h1>
-                <p class="text-muted">Ultimo aggiornamento: {{ moment().format('DD/MM/YYYY') }}</p>
+                <p class="text-muted">Ultimo aggiornamento: 29 agosto 2025</p>
                 
                 <div class="alert alert-info">
                     <strong>Questa privacy policy si applica a tutti i servizi di assessment e formazione forniti dal Gruppo Auxiell.</strong>
@@ -106,10 +106,43 @@
                 <h3>9. Cookies</h3>
                 <p>Utilizziamo solo cookies tecnici essenziali per:</p>
                 <ul>
-                    <li>Mantenere la sessione di login</li>
-                    <li>Garantire funzionalità di base</li>
-                    <li>Non utilizziamo cookies di profilazione o marketing</li>
+                    <li><strong>Mantenere la sessione di login:</strong> Necessario per identificarti durante la navigazione</li>
+                    <li><strong>Garantire funzionalità di base:</strong> Memorizzazione temporanea delle preferenze di sessione</li>
+                    <li><strong>Sicurezza:</strong> Protezione contro attacchi CSRF e mantenimento dell'autenticazione</li>
                 </ul>
+                <div class="alert alert-info">
+                    <strong>Importante:</strong> Non utilizziamo cookies di profilazione, marketing, tracking o analytics. 
+                    I cookies utilizzati sono strettamente necessari per il funzionamento del servizio e non richiedono 
+                    consenso esplicito secondo l'Art. 122 del Codice Privacy.
+                </div>
+
+                <h4>Tipi di Cookies Utilizzati:</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Tipo</th>
+                                <th>Durata</th>
+                                <th>Finalità</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>session</td>
+                                <td>Tecnico essenziale</td>
+                                <td>Fine sessione</td>
+                                <td>Mantenimento login e stato utente</td>
+                            </tr>
+                            <tr>
+                                <td>cookiesAccepted</td>
+                                <td>Tecnico (localStorage)</td>
+                                <td>Permanente</td>
+                                <td>Memorizzazione accettazione informativa</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <h3>10. Contatti</h3>
                 <div class="row">
@@ -169,4 +202,47 @@
         </div>
     </div>
 </div>
+
+<!-- Cookie Notice -->
+<div id="cookie-notice" class="alert alert-info position-fixed bottom-0 start-50 translate-middle-x m-3" style="display: none; max-width: 600px; z-index: 1050;">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+        <div class="mb-2 mb-md-0">
+            <strong>Informativa Cookies</strong><br>
+            <small>
+                Utilizziamo solo cookies tecnici essenziali per il login e funzionalità di base. 
+                <a href="{{ url_for('privacy_policy') }}" class="text-decoration-none">Maggiori info</a>
+            </small>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="acceptCookies()">
+            Ho Capito
+        </button>
+    </div>
+</div>
+
+<script>
+function acceptCookies() {
+    try {
+        localStorage.setItem('cookiesAccepted', 'true');
+    } catch(e) {
+        // Fallback if localStorage not available
+        document.cookie = 'cookiesAccepted=true; path=/; max-age=31536000';
+    }
+    document.getElementById('cookie-notice').style.display = 'none';
+}
+
+// Show notice if not already accepted
+document.addEventListener('DOMContentLoaded', function() {
+    let accepted = false;
+    try {
+        accepted = localStorage.getItem('cookiesAccepted') === 'true';
+    } catch(e) {
+        // Check cookie fallback
+        accepted = document.cookie.includes('cookiesAccepted=true');
+    }
+    
+    if (!accepted) {
+        document.getElementById('cookie-notice').style.display = 'block';
+    }
+});
+</script>
 {% endblock %}
