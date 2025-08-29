@@ -1006,7 +1006,214 @@ def answers_match(user_answer, correct_answer):
     correct_minimal = re.sub(r'[^\w]', '', correct_clean)
 
     return user_minimal == correct_minimal
+@app.route('/gdpr-requests')
+@login_required
+def gdpr_requests():
+    """Pagina principale richieste GDPR"""
+    try:
+        logo_path, logo_exists = get_logo_info(session.get('azienda_scelta'))
+        company_color = get_company_color(session.get('azienda_scelta'))
+        
+        return render_template('gdpr_requests.html',
+                             utente=session.get('utente'),
+                             azienda=session.get('azienda_scelta'),
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+    except Exception as e:
+        logger.error(f"GDPR requests error: {e}")
+        return render_template('error.html', error='Errore caricamento pagina GDPR')
 
+@app.route('/delete-account')
+@login_required
+def delete_account():
+    """Pagina informazioni cancellazione account"""
+    try:
+        logo_path, logo_exists = get_logo_info(session.get('azienda_scelta'))
+        company_color = get_company_color(session.get('azienda_scelta'))
+        
+        return render_template('delete_account.html',
+                             utente=session.get('utente'),
+                             azienda=session.get('azienda_scelta'),
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+    except Exception as e:
+        logger.error(f"Delete account page error: {e}")
+        return render_template('error.html', error='Errore caricamento pagina cancellazione account')
+
+@app.route('/data-export')
+@login_required
+def data_export():
+    """Esporta tutti i dati dell'utente (GDPR compliance)"""
+    try:
+        user_email = session.get('user_email')
+        if not user_email:
+            return render_template('error.html', error='Sessione scaduta')
+        
+        # Recupera dati utente
+        user_data = get_user_data(user_email)
+        if not user_data:
+            return render_template('error.html', error='Dati utente non trovati')
+        
+        # Recupera risultati test
+        test_results = get_user_test_results(user_email)
+        
+        # Prepara dati per export
+        export_data = {
+            'informazioni_account': {
+                'email': user_data.get('email', ''),
+                'nome': user_data.get('nome', ''),
+                'cognome': user_data.get('cognome', ''),
+                'azienda': user_data.get('azienda', ''),
+                'data_creazione': user_data.get('created_at', ''),
+                'ultimo_accesso': user_data.get('last_login', ''),
+                'tipo_account': 'Admin' if user_data.get('is_admin') else 'Utente Standard'
+            },
+            'risultati_test': [],
+            'statistiche_generali': {
+                'numero_test_completati': len(test_results),
+                'data_primo_test': None,
+                'data_ultimo_test': None
+            }
+        }
+        
+        # Processa risultati test
+        for result in test_results:
+            test_data = {
+                'nome_test': result.get('test_name', ''),
+                'data_completamento': result.get('completed_at', ''),
+                'punteggio_percentuale': result.get('score', 0),
+                'risposte_corrette': result.get('correct_answers', 0),
+                'totale_domande': result.get('total_questions', 0),
+                'azienda': result.get('azienda', '')
+            }
+            
+            # Aggiungi dettagli risposte se disponibili
+            if result.get('answers_json'):
+                try:
+                    answers_detail = json.loads(result.get('answers_json', '[]'))
+                    test_data['dettaglio_risposte'] = answers_detail
+                except:
+                    test_data['dettaglio_risposte'] = []
+            
+            export_data['risultati_test'].append(test_data)
+        
+        # Calcola statistiche
+        if test_results:
+            dates = [r.get('completed_at') for r in test_results if r.get('completed_at')]
+            dates = [d for d in dates if d]  # Rimuovi valori None/vuoti
+            
+            if dates:
+                export_data['statistiche_generali']['data_primo_test'] = min(dates)
+                export_data['statistiche_generali']['data_ultimo_test'] = max(dates)
+        
+        # Crea file Excel
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Sheet 1: Informazioni Account
+            account_df = pd.DataFrame([export_data['informazioni_account']])
+            account_df.to_excel(writer, index=False, sheet_name="Informazioni Account")
+            
+            # Sheet 2: Statistiche
+            stats_df = pd.DataFrame([export_data['statistiche_generali']])
+            stats_df.to_excel(writer, index=False, sheet_name="Statistiche")
+            
+            # Sheet 3: Risultati Test (senza dettagli risposte)
+            if export_data['risultati_test']:
+                test_summary = []
+                for test in export_data['risultati_test']:
+                    summary = {k: v for k, v in test.items() if k != 'dettaglio_risposte'}
+                    test_summary.append(summary)
+                
+                test_df = pd.DataFrame(test_summary)
+                test_df.to_excel(writer, index=False, sheet_name="Risultati Test")
+            
+            # Sheet 4: Dettagli Completi (se ci sono test)
+            if export_data['risultati_test']:
+                all_answers = []
+                for test in export_data['risultati_test']:
+                    test_name = test.get('nome_test', '')
+                    test_date = test.get('data_completamento', '')
+                    
+                    for answer in test.get('dettaglio_risposte', []):
+                        answer_row = answer.copy()
+                        answer_row['Nome_Test_Origine'] = test_name
+                        answer_row['Data_Test'] = test_date
+                        all_answers.append(answer_row)
+                
+                if all_answers:
+                    details_df = pd.DataFrame(all_answers)
+                    details_df.to_excel(writer, index=False, sheet_name="Dettagli Completi")
+        
+        buf.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', session.get('utente', 'utente')).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        
+        filename = f"dati_personali_{nome_sicuro}_{timestamp}.xlsx"
+        
+        logger.info(f"Data export requested by: {user_email}")
+        
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Data export error: {e}")
+        return render_template('error.html', error=f'Errore esportazione dati: {e}')
+
+@app.route('/privacy-policy')
+def privacy_policy():
+    """Pagina informativa privacy policy"""
+    try:
+        # Determina azienda per styling
+        azienda = 'auxiell'  # default
+        company_color = get_company_color(azienda)
+        
+        if session.get('logged_in'):
+            azienda = session.get('azienda_scelta', 'auxiell')
+            company_color = get_company_color(azienda)
+        
+        logo_path, logo_exists = get_logo_info(azienda)
+        
+        return render_template('privacy_policy.html',
+                             azienda=azienda,
+                             company_color=company_color,
+                             logo_path=logo_path if logo_exists else None)
+    except Exception as e:
+        logger.error(f"Privacy policy error: {e}")
+        return render_template('error.html', error='Errore caricamento privacy policy')
+
+# Route per admin - gestione richieste GDPR
+@app.route('/admin/gdpr-requests')
+@login_required
+def admin_gdpr_requests():
+    """Dashboard admin per richieste GDPR"""
+    user_email = session.get('user_email')
+    
+    if not is_admin_user(user_email):
+        return render_template('error.html', error='Accesso negato. Solo per amministratori.')
+    
+    try:
+        # Questa è una pagina informativa per ora
+        # In futuro potresti aggiungere un sistema di tracking delle richieste GDPR
+        
+        return render_template('admin_gdpr.html',
+                             utente=session.get('utente', 'Admin'),
+                             azienda_scelta=session.get('azienda_scelta', 'auxiell'),
+                             company_color=get_company_color(session.get('azienda_scelta', 'auxiell')))
+        
+    except Exception as e:
+        logger.error(f"Admin GDPR requests error: {e}")
+        return render_template('error.html', error='Errore caricamento dashboard GDPR admin')
+
+# Aggiungi anche supporto per le richieste GDPR nella dashboard principale
+# Modifica la tua dashboard route per includere un link alle richieste GDPR
 @app.route('/submit_answers', methods=['POST'])
 @login_required
 def submit_answers():
