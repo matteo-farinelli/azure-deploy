@@ -188,6 +188,52 @@
             </div>
         </div>
     </div>
+<div class="row mt-4">
+    <div class="col-12">
+        <h3>Privacy e Dati Personali</h3>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Privacy Policy</h5>
+                        <p class="card-text">Consulta la nostra informativa sulla privacy</p>
+                        <a href="{{ url_for('privacy_policy') }}" class="btn btn-outline-primary">
+                            Leggi Policy
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-download fa-3x text-success mb-3"></i>
+                        <h5 class="card-title">I Miei Dati</h5>
+                        <p class="card-text">Scarica tutti i tuoi dati personali</p>
+                        <a href="{{ url_for('data_export') }}" class="btn btn-outline-success">
+                            Esporta Dati
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-user-cog fa-3x text-warning mb-3"></i>
+                        <h5 class="card-title">Diritti GDPR</h5>
+                        <p class="card-text">Gestisci i tuoi diritti sulla privacy</p>
+                        <a href="{{ url_for('gdpr_requests') }}" class="btn btn-outline-warning">
+                            Gestisci Diritti
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function confirmStartTest(testName) {
     return confirm('Sei sicuro di voler iniziare il test "' + testName + '"?\n\nATTENZIONE: Potrai completarlo UNA SOLA VOLTA.');
