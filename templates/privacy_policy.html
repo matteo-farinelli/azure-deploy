@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="dashboard-card">
+                <h1>Privacy Policy</h1>
+                <p class="text-muted">Ultimo aggiornamento: {{ moment().format('DD/MM/YYYY') }}</p>
+                
+                <div class="alert alert-info">
+                    <strong>Questa privacy policy si applica a tutti i servizi di assessment e formazione forniti dal Gruppo Auxiell.</strong>
+                </div>
+
+                <h3>1. Raccolta dei Dati</h3>
+                <p>Raccogliamo le seguenti tipologie di dati personali:</p>
+                <ul>
+                    <li><strong>Dati di identificazione:</strong> Nome, cognome, email aziendale</li>
+                    <li><strong>Dati aziendali:</strong> Azienda di appartenenza</li>
+                    <li><strong>Dati di utilizzo:</strong> Risultati dei test, risposte fornite, timestamp delle attività</li>
+                    <li><strong>Dati tecnici:</strong> Log di accesso, indirizzo IP, browser utilizzato</li>
+                </ul>
+
+                <h3>2. Finalità del Trattamento</h3>
+                <p>I tuoi dati personali sono trattati per:</p>
+                <ul>
+                    <li>Fornire i servizi di assessment e formazione</li>
+                    <li>Generare report personalizzati sui risultati</li>
+                    <li>Monitorare il progresso formativo</li>
+                    <li>Garantire la sicurezza del sistema</li>
+                    <li>Rispettare obblighi di legge e contrattuali</li>
+                </ul>
+
+                <h3>3. Base Giuridica</h3>
+                <p>Il trattamento dei tuoi dati è basato su:</p>
+                <ul>
+                    <li><strong>Contratto:</strong> Esecuzione del contratto di formazione/assessment</li>
+                    <li><strong>Interesse legittimo:</strong> Miglioramento dei servizi e sicurezza</li>
+                    <li><strong>Consenso:</strong> Dove richiesto dalla legge</li>
+                </ul>
+
+                <h3>4. Conservazione dei Dati</h3>
+                <p>I dati personali sono conservati per:</p>
+                <ul>
+                    <li><strong>Dati account:</strong> Per la durata del rapporto contrattuale + 5 anni</li>
+                    <li><strong>Risultati test:</strong> Per finalità formative + 3 anni dalla conclusione</li>
+                    <li><strong>Log tecnici:</strong> Massimo 12 mesi</li>
+                </ul>
+
+                <h3>5. I Tuoi Diritti (GDPR)</h3>
+                <p>Secondo il GDPR, hai diritto a:</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul>
+                            <li><strong>Accesso:</strong> Ottenere copia dei tuoi dati</li>
+                            <li><strong>Rettifica:</strong> Correggere dati inesatti</li>
+                            <li><strong>Cancellazione:</strong> Eliminare i tuoi dati</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul>
+                            <li><strong>Limitazione:</strong> Limitare il trattamento</li>
+                            <li><strong>Portabilità:</strong> Trasferire i dati</li>
+                            <li><strong>Opposizione:</strong> Opporti al trattamento</li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% if session.logged_in %}
+                <div class="alert alert-success mt-3">
+                    <h5>Esercita i Tuoi Diritti</h5>
+                    <p>Come utente registrato, puoi esercitare i tuoi diritti direttamente:</p>
+                    <a href="{{ url_for('gdpr_requests') }}" class="btn btn-primary">
+                        Gestisci i Tuoi Diritti GDPR
+                    </a>
+                </div>
+                {% endif %}
+
+                <h3>6. Sicurezza dei Dati</h3>
+                <p>Implementiamo misure di sicurezza appropriate:</p>
+                <ul>
+                    <li>Crittografia delle password (SHA-256)</li>
+                    <li>Connessioni HTTPS sicure</li>
+                    <li>Accesso limitato ai dati del personale autorizzato</li>
+                    <li>Storage sicuro su Microsoft Azure</li>
+                    <li>Backup regolari e disaster recovery</li>
+                </ul>
+
+                <h3>7. Condivisione dei Dati</h3>
+                <p>I tuoi dati possono essere condivisi con:</p>
+                <ul>
+                    <li><strong>La tua azienda:</strong> Solo risultati aggregati e report formativi</li>
+                    <li><strong>Fornitori di servizi:</strong> Microsoft Azure (hosting), rispettando accordi di protezione dati</li>
+                    <li><strong>Autorità:</strong> Solo se richiesto dalla legge</li>
+                </ul>
+                <p><strong>Non vendiamo mai i tuoi dati personali a terzi.</strong></p>
+
+                <h3>8. Trasferimenti Internazionali</h3>
+                <p>I dati possono essere trasferiti in paesi UE/SEE. Per trasferimenti extra-UE utilizziamo:</p>
+                <ul>
+                    <li>Standard Contractual Clauses (SCC)</li>
+                    <li>Certificazioni di adeguatezza</li>
+                    <li>Garanzie appropriate secondo GDPR Art. 46</li>
+                </ul>
+
+                <h3>9. Cookies</h3>
+                <p>Utilizziamo solo cookies tecnici essenziali per:</p>
+                <ul>
+                    <li>Mantenere la sessione di login</li>
+                    <li>Garantire funzionalità di base</li>
+                    <li>Non utilizziamo cookies di profilazione o marketing</li>
+                </ul>
+
+                <h3>10. Contatti</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Titolare del Trattamento</h5>
+                        <p>
+                            <strong>Auxiell S.r.l.</strong><br>
+                            Via Example, 123<br>
+                            20100 Milano (MI)<br>
+                            P.IVA: 12345678901<br>
+                            Email: <a href="mailto:privacy@auxiell.com">privacy@auxiell.com</a>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Data Protection Officer</h5>
+                        <p>
+                            Email: <a href="mailto:dpo@auxiell.com">dpo@auxiell.com</a><br>
+                            Tel: +39 02 1234567
+                        </p>
+                        
+                        <h5>Autorità di Controllo</h5>
+                        <p>
+                            <strong>Garante Privacy</strong><br>
+                            <a href="https://www.gpdp.it" target="_blank">www.gpdp.it</a>
+                        </p>
+                    </div>
+                </div>
+
+                <h3>11. Modifiche alla Privacy Policy</h3>
+                <p>Questa privacy policy può essere aggiornata. Ti informeremo di modifiche significative tramite:</p>
+                <ul>
+                    <li>Notifica nella dashboard al primo accesso</li>
+                    <li>Email all'indirizzo registrato</li>
+                    <li>Avviso su questa pagina</li>
+                </ul>
+
+                <div class="alert alert-secondary mt-4">
+                    <h5>Domande?</h5>
+                    <p class="mb-0">
+                        Per qualsiasi domanda sulla privacy o sui tuoi dati, contatta: 
+                        <a href="mailto:helpdesk@auxiell.com">helpdesk@auxiell.com</a>
+                    </p>
+                </div>
+                
+                <div class="text-center mt-4">
+                    {% if session.logged_in %}
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                            Torna alla Dashboard
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="btn btn-primary">
+                            Accedi al Sistema
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
