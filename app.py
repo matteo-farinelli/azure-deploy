@@ -952,15 +952,18 @@ def admin_dashboard():
         return render_template('error.html', error='Accesso negato. Solo per amministratori.')
 
     try:
-        data = load_progress_data()
+        # Carica TUTTI i dati (inclusi tentativi multipli)
+        data = load_progress_data_with_attempts()
 
         total_users = len(data.get('users', {}))
-        total_tests = len(data.get('test_results', []))
+        
+        # Per le statistiche generali, usa solo gli ultimi tentativi
+        latest_results = get_latest_attempts_only(data.get('test_results', []))
+        total_tests_latest = len(latest_results)
 
-        # Calcola punteggio medio generale
-        test_results = data.get('test_results', [])
-        if test_results:
-            scores = [result.get('score', 0) for result in test_results if result.get('score') is not None]
+        # Calcola punteggio medio generale (solo ultimi tentativi)
+        if latest_results:
+            scores = [result.get('score', 0) for result in latest_results if result.get('score') is not None]
             if scores:
                 average_score = sum(scores) / len(scores)
                 success_rate = (len([s for s in scores if s >= 60]) / len(scores)) * 100
@@ -971,7 +974,7 @@ def admin_dashboard():
             average_score = 0
             success_rate = 0
 
-        # Statistiche per azienda
+        # Statistiche per azienda (solo ultimi tentativi)
         stats_per_azienda = {}
 
         # Conta utenti per azienda
@@ -985,8 +988,8 @@ def admin_dashboard():
                 }
             stats_per_azienda[azienda]['users'] += 1
 
-        # Conta test per azienda
-        for result in data.get('test_results', []):
+        # Conta test per azienda (solo ultimi tentativi)
+        for result in latest_results:
             azienda = result.get('azienda', 'Unknown')
             score = result.get('score')
 
@@ -1005,11 +1008,12 @@ def admin_dashboard():
                 stats_per_azienda[azienda]['average_score'] = 0
                 stats_per_azienda[azienda]['success_rate'] = 0
 
-        # Test recenti
+        # Test recenti - INCLUDE TUTTI i tentativi con info sui tentativi
+        all_test_results = data.get('test_results', [])
         recent_tests = []
-        sorted_tests = sorted(test_results, key=lambda x: x.get('completed_at', ''), reverse=True)
+        sorted_tests = sorted(all_test_results, key=lambda x: x.get('completed_at', ''), reverse=True)
 
-        for test in sorted_tests[:10]:
+        for test in sorted_tests[:20]:  # Ultimi 20 invece di 10 per vedere più tentativi
             email = test.get('user_email', '')
             if email:
                 nome, cognome = extract_name_from_email(email)
@@ -1020,11 +1024,11 @@ def admin_dashboard():
 
         return render_template('admin_dashboard.html',
                              total_users=total_users,
-                             total_tests=total_tests,
+                             total_tests=total_tests_latest,  # Usa solo ultimi tentativi per stats generali
                              average_score=average_score,
                              success_rate=success_rate,
                              stats_per_azienda=stats_per_azienda,
-                             recent_tests=recent_tests,
+                             recent_tests=recent_tests,  # Include tutti i tentativi
                              utente=session.get('utente', 'Admin'),
                              azienda_scelta=session.get('azienda_scelta', 'auxiell'),
                              company_color=get_company_color(session.get('azienda_scelta', 'auxiell')))
@@ -1032,12 +1036,43 @@ def admin_dashboard():
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         return render_template('error.html', error=f'Errore dashboard admin: {str(e)}')
-# Aggiungi queste route al tuo app.py
 
+def load_progress_data_with_attempts():
+    """Carica tutti i dati inclusi tentativi multipli da Azure Tables"""
+    try:
+        users = get_all_users_azure_only()
+        test_results = get_all_test_results_azure_only()  # Include tutti i tentativi
+
+        return {
+            "users": users,
+            "test_results": test_results,
+            "last_updated": datetime.now().isoformat(),
+            "source": "azure_tables_with_attempts"
+        }
+    except Exception as e:
+        logger.error(f"❌ ERRORE CRITICO load_progress_data_with_attempts: {e}")
+        raise Exception(f"Impossibile caricare dati: {e}")
+
+def get_latest_attempts_only(test_results):
+    """Filtra solo gli ultimi tentativi da una lista di risultati"""
+    latest_results = {}
+    
+    for result in test_results:
+        user_email = result.get('user_email', '')
+        test_name = result.get('test_name', '')
+        attempt_number = result.get('attempt_number', 1)
+        
+        key = f"{user_email}_{test_name}"
+        
+        if key not in latest_results or attempt_number > latest_results[key].get('attempt_number', 1):
+            latest_results[key] = result
+    
+    return list(latest_results.values())
+    
 @app.route('/admin/user/<user_email>')
 @login_required
 def admin_user_details(user_email):
-    """Dettagli di un utente specifico per admin"""
+    """Dettagli di un utente specifico per admin - INCLUDE TUTTI I TENTATIVI"""
     admin_email = session.get('user_email')
     
     if not is_admin_user(admin_email):
@@ -1049,8 +1084,8 @@ def admin_user_details(user_email):
         if not user_data:
             return render_template('error.html', error=f'Utente {user_email} non trovato.')
         
-        # Recupera tutti i test dell'utente
-        user_test_results = get_user_test_results(user_email)
+        # Recupera TUTTI i test dell'utente (inclusi tentativi multipli)
+        user_test_results = get_user_test_results_all_attempts_azure_only(user_email)
         
         # Formatta i dati per il template
         formatted_tests = []
@@ -1072,11 +1107,16 @@ def admin_user_details(user_email):
                 'correct_answers': result.get('correct_answers', 0),
                 'total_questions': result.get('total_questions', 0),
                 'azienda': result.get('azienda', 'N/A'),
+                'attempt_number': result.get('attempt_number', 1),
+                'is_latest': result.get('is_latest', True),
                 'raw_result': result  # Per il download
             })
         
-        # Ordina per data (più recenti prima)
-        formatted_tests.sort(key=lambda x: x['completed_at'], reverse=True)
+        # Ordina per test_name e poi per attempt_number
+        formatted_tests.sort(key=lambda x: (x['test_name'], x['attempt_number']), reverse=True)
+        
+        # Calcola statistiche solo sugli ultimi tentativi
+        latest_tests = [t for t in formatted_tests if t['is_latest']]
         
         # Estrai nome e cognome dall'email
         nome, cognome = extract_name_from_email(user_email)
@@ -1085,8 +1125,10 @@ def admin_user_details(user_email):
                              user_email=user_email,
                              user_name=f"{nome} {cognome}",
                              user_data=user_data,
-                             test_results=formatted_tests,
-                             total_tests=len(formatted_tests),
+                             test_results=formatted_tests,  # Tutti i tentativi
+                             latest_test_results=latest_tests,  # Solo ultimi tentativi
+                             total_tests=len(latest_tests),  # Conta solo ultimi tentativi
+                             total_attempts=len(formatted_tests),  # Conta tutti i tentativi
                              admin_name=session.get('utente', 'Admin'),
                              azienda_scelta=session.get('azienda_scelta', 'auxiell'),
                              company_color=get_company_color(session.get('azienda_scelta', 'auxiell')))
@@ -1094,7 +1136,7 @@ def admin_user_details(user_email):
     except Exception as e:
         logger.error(f"Admin user details error for {user_email}: {e}")
         return render_template('error.html', error=f'Errore caricamento dettagli utente: {str(e)}')
-
+        
 @app.route('/admin/download_user_test/<user_email>/<test_name>')
 @login_required
 def admin_download_user_test(user_email, test_name):
