@@ -905,7 +905,91 @@ def admin_download_user_test(user_email, test_name):
     except Exception as e:
         logger.error(f"Admin download error: {e}")
         return f"Errore durante il download: {e}", 500
-
+@app.route('/admin/users')
+@login_required
+def admin_all_users():
+    """Lista completa di tutti gli utenti per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return render_template('error.html', error='Accesso negato. Solo per amministratori.')
+    
+    try:
+        # Carica tutti i dati
+        data = load_progress_data()
+        users = data.get('users', {})
+        test_results = data.get('test_results', [])
+        
+        # Prepara lista utenti con statistiche
+        users_list = []
+        
+        for email, user_data in users.items():
+            # Conta test per questo utente
+            user_tests = [t for t in test_results if t.get('user_email') == email]
+            
+            # Calcola statistiche
+            if user_tests:
+                scores = [t.get('score', 0) for t in user_tests]
+                avg_score = sum(scores) / len(scores) if scores else 0
+                passed_tests = len([s for s in scores if s >= 60])
+                last_test_date = max([t.get('completed_at', '') for t in user_tests])
+            else:
+                avg_score = 0
+                passed_tests = 0
+                last_test_date = None
+            
+            # Formatta data ultimo test
+            if last_test_date:
+                try:
+                    dt = datetime.fromisoformat(last_test_date.replace('Z', '+00:00'))
+                    last_test_formatted = dt.strftime('%d/%m/%Y')
+                except:
+                    last_test_formatted = "N/A"
+            else:
+                last_test_formatted = "Mai"
+            
+            # Formatta data registrazione
+            created_at = user_data.get('created_at', '')
+            if created_at:
+                try:
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    created_formatted = dt.strftime('%d/%m/%Y')
+                except:
+                    created_formatted = created_at[:10] if len(created_at) >= 10 else "N/A"
+            else:
+                created_formatted = "N/A"
+            
+            # Estrai nome
+            nome, cognome = extract_name_from_email(email)
+            
+            users_list.append({
+                'email': email,
+                'nome': nome,
+                'cognome': cognome,
+                'nome_completo': f"{nome} {cognome}",
+                'azienda': user_data.get('azienda', 'N/A'),
+                'is_admin': user_data.get('is_admin', False),
+                'created_at': created_formatted,
+                'last_test': last_test_formatted,
+                'total_tests': len(user_tests),
+                'avg_score': round(avg_score, 1),
+                'passed_tests': passed_tests,
+                'user_data': user_data
+            })
+        
+        # Ordina per data ultimo test (più recenti prima)
+        users_list.sort(key=lambda x: x['last_test'], reverse=True)
+        
+        return render_template('admin_users_list.html',
+                             users=users_list,
+                             total_users=len(users_list),
+                             admin_name=session.get('utente', 'Admin'),
+                             azienda_scelta=session.get('azienda_scelta', 'auxiell'),
+                             company_color=get_company_color(session.get('azienda_scelta', 'auxiell')))
+                             
+    except Exception as e:
+        logger.error(f"Admin users list error: {e}")
+        return render_template('error.html', error=f'Errore caricamento lista utenti: {str(e)}')
 @app.route('/admin/download_all_user_tests/<user_email>')
 @login_required
 def admin_download_all_user_tests(user_email):
