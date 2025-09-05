@@ -85,14 +85,6 @@ def get_user_test_results(email):
     """Recupera risultati test SOLO da Azure Table Storage"""
     return get_user_test_results_azure_only(email)
 
-def save_test_result(result):
-    """Salva risultato test SOLO su Azure Table Storage"""
-    # Aggiungi timestamp se mancante
-    if not result.get('completed_at'):
-        result['completed_at'] = datetime.now().isoformat()
-
-    return save_test_result_azure_only(result)
-
 def validate_email(email):
     """Valida email aziendale inclusi admin"""
     normal_pattern = r'^[a-zA-Z]+\.[a-zA-Z]+@(auxiell|euxilia|xva-services)\.com$'
