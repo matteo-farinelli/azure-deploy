@@ -597,13 +597,24 @@ def dashboard():
                 df_tipologie = pd.read_excel(tipologie_file)
 
                 if "Nome test" in df_tipologie.columns:
+                    
+                    # FUNZIONE HELPER per controllare se l'azienda è nella lista
+                    def azienda_match(azienda_cell, azienda_utente):
+                        """Controlla se l'azienda dell'utente è presente nella cella"""
+                        if pd.isna(azienda_cell) or not azienda_cell:
+                            return False
+                        
+                        # Converte in stringa e divide per punto e virgola
+                        aziende_test = [a.strip().lower() for a in str(azienda_cell).split(";")]
+                        return azienda_utente.lower() in aziende_test
+
                     for _, row in df_tipologie.iterrows():
                         test_name = row["Nome test"]
 
                         test_available = True
                         if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
-                            aziende_test = [a.strip() for a in str(row["Azienda"]).split(";")]
-                            test_available = azienda in aziende_test
+                            # USA LA NUOVA LOGICA per supportare aziende multiple
+                            test_available = azienda_match(row["Azienda"], azienda)
 
                         if test_available:
                             is_completed = test_name in completed_test_names
@@ -612,6 +623,7 @@ def dashboard():
                                 'completed': is_completed,
                                 'can_attempt': not is_completed
                             })
+                            
         except Exception as e:
             logger.error(f"Error loading tests: {e}")
 
