@@ -731,7 +731,279 @@ def admin_dashboard():
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         return render_template('error.html', error=f'Errore dashboard admin: {str(e)}')
+# Aggiungi queste route al tuo app.py
 
+@app.route('/admin/user/<user_email>')
+@login_required
+def admin_user_details(user_email):
+    """Dettagli di un utente specifico per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return render_template('error.html', error='Accesso negato. Solo per amministratori.')
+    
+    try:
+        # Recupera dati utente
+        user_data = get_user_data(user_email)
+        if not user_data:
+            return render_template('error.html', error=f'Utente {user_email} non trovato.')
+        
+        # Recupera tutti i test dell'utente
+        user_test_results = get_user_test_results(user_email)
+        
+        # Formatta i dati per il template
+        formatted_tests = []
+        for result in user_test_results:
+            completed_at = result.get('completed_at', '')
+            if completed_at:
+                try:
+                    dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                    data_formattata = dt.strftime('%d/%m/%Y %H:%M')
+                except:
+                    data_formattata = completed_at
+            else:
+                data_formattata = "N/A"
+            
+            formatted_tests.append({
+                'test_name': result.get('test_name', 'N/A'),
+                'completed_at': data_formattata,
+                'score': result.get('score', 0),
+                'correct_answers': result.get('correct_answers', 0),
+                'total_questions': result.get('total_questions', 0),
+                'azienda': result.get('azienda', 'N/A'),
+                'raw_result': result  # Per il download
+            })
+        
+        # Ordina per data (più recenti prima)
+        formatted_tests.sort(key=lambda x: x['completed_at'], reverse=True)
+        
+        # Estrai nome e cognome dall'email
+        nome, cognome = extract_name_from_email(user_email)
+        
+        return render_template('admin_user_details.html',
+                             user_email=user_email,
+                             user_name=f"{nome} {cognome}",
+                             user_data=user_data,
+                             test_results=formatted_tests,
+                             total_tests=len(formatted_tests),
+                             admin_name=session.get('utente', 'Admin'),
+                             azienda_scelta=session.get('azienda_scelta', 'auxiell'),
+                             company_color=get_company_color(session.get('azienda_scelta', 'auxiell')))
+                             
+    except Exception as e:
+        logger.error(f"Admin user details error for {user_email}: {e}")
+        return render_template('error.html', error=f'Errore caricamento dettagli utente: {str(e)}')
+
+@app.route('/admin/download_user_test/<user_email>/<test_name>')
+@login_required
+def admin_download_user_test(user_email, test_name):
+    """Download di un test specifico di un utente per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return "Accesso negato. Solo per amministratori.", 403
+    
+    try:
+        # Recupera risultati dell'utente
+        user_results = get_user_test_results(user_email)
+        
+        # Trova il test specifico
+        found_result = None
+        for result in user_results:
+            if result.get('test_name') == test_name:
+                found_result = result
+                break
+        
+        if not found_result:
+            return f"Test '{test_name}' non trovato per l'utente {user_email}.", 404
+        
+        try:
+            risposte = json.loads(found_result.get('answers_json', '[]'))
+            if not risposte:
+                return "Dati del test non disponibili.", 404
+        except Exception as e:
+            logger.error(f"Errore parsing JSON: {e}")
+            return "Errore nel recupero dei dati del test.", 500
+        
+        # Estrai nome utente dall'email
+        nome, cognome = extract_name_from_email(user_email)
+        utente_nome = f"{nome} {cognome}"
+        azienda = found_result.get('azienda', 'N/A')
+        
+        # Crea DataFrame
+        df_r = pd.DataFrame(risposte)
+        
+        # Calcola punteggio
+        chiuse = df_r[df_r["Tipo"] == "chiusa"]
+        n_tot = len(chiuse)
+        n_cor = int(chiuse["Esatta"].sum()) if n_tot else 0
+        perc = int(n_cor / n_tot * 100) if n_tot else 0
+        
+        # Data completamento
+        completed_at = found_result.get('completed_at', '')
+        if completed_at:
+            try:
+                dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                data_test = dt.strftime("%d/%m/%Y %H:%M")
+            except:
+                data_test = completed_at
+        else:
+            data_test = "N/A"
+        
+        # Crea info sheet
+        data_download = datetime.now().strftime("%d/%m/%Y %H:%M")
+        admin_name = session.get('utente', 'Admin')
+        
+        info = pd.DataFrame([{
+            "Scaricato da Admin": admin_name,
+            "Data Download": data_download,
+            "Nome Utente": utente_nome,
+            "Email Utente": user_email,
+            "Data Completamento Test": data_test,
+            "Test": test_name,
+            "Azienda": azienda,
+            "Punteggio": f"{perc}%",
+            "Risposte Corrette": f"{n_cor}/{n_tot}",
+            "Totale Domande": n_tot
+        }])
+        
+        # Crea file Excel
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            info.to_excel(writer, index=False, sheet_name="Info Download", startrow=0)
+            
+            # Riordina colonne per leggibilità
+            column_order = ["Tipo", "Azienda", "Utente", "Test", "Argomento", "Domanda", "Risposta", "Corretta", "Esatta"]
+            existing_columns = [col for col in column_order if col in df_r.columns]
+            other_columns = [col for col in df_r.columns if col not in column_order]
+            final_columns = existing_columns + other_columns
+            
+            df_export = df_r[final_columns]
+            df_export.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
+        
+        buf.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', utente_nome).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        test_sicuro = re.sub(r'[^\w\s-]', '', test_name).strip()
+        test_sicuro = re.sub(r'[-\s]+', '_', test_sicuro)
+        
+        filename = f"admin_download_{nome_sicuro}_{test_sicuro}_{timestamp}.xlsx"
+        
+        logger.info(f"Admin {admin_email} downloaded test {test_name} for user {user_email}")
+        
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Admin download error: {e}")
+        return f"Errore durante il download: {e}", 500
+
+@app.route('/admin/download_all_user_tests/<user_email>')
+@login_required
+def admin_download_all_user_tests(user_email):
+    """Download di tutti i test di un utente per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return "Accesso negato. Solo per amministratori.", 403
+    
+    try:
+        # Recupera tutti i risultati dell'utente
+        user_results = get_user_test_results(user_email)
+        
+        if not user_results:
+            return f"Nessun test trovato per l'utente {user_email}.", 404
+        
+        # Estrai nome utente
+        nome, cognome = extract_name_from_email(user_email)
+        utente_nome = f"{nome} {cognome}"
+        
+        # Crea file Excel con tutti i test
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Sheet di riepilogo
+            summary_data = []
+            for result in user_results:
+                completed_at = result.get('completed_at', '')
+                if completed_at:
+                    try:
+                        dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                        data_formattata = dt.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        data_formattata = completed_at
+                else:
+                    data_formattata = "N/A"
+                
+                summary_data.append({
+                    'Test': result.get('test_name', 'N/A'),
+                    'Data Completamento': data_formattata,
+                    'Punteggio (%)': result.get('score', 0),
+                    'Risposte Corrette': result.get('correct_answers', 0),
+                    'Totale Domande': result.get('total_questions', 0),
+                    'Azienda': result.get('azienda', 'N/A')
+                })
+            
+            # Info generale
+            admin_name = session.get('utente', 'Admin')
+            data_download = datetime.now().strftime("%d/%m/%Y %H:%M")
+            
+            info_generale = pd.DataFrame([{
+                'Scaricato da Admin': admin_name,
+                'Data Download': data_download,
+                'Nome Utente': utente_nome,
+                'Email Utente': user_email,
+                'Totale Test Completati': len(user_results)
+            }])
+            
+            # Scrivi sheets
+            info_generale.to_excel(writer, index=False, sheet_name="Info Download", startrow=0)
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, index=False, sheet_name="Riepilogo Test", startrow=0)
+            
+            # Sheet per ogni test (se non troppi)
+            if len(user_results) <= 10:  # Limita per evitare file troppo grandi
+                for i, result in enumerate(user_results):
+                    try:
+                        risposte = json.loads(result.get('answers_json', '[]'))
+                        if risposte:
+                            df_test = pd.DataFrame(risposte)
+                            test_name = result.get('test_name', f'Test_{i+1}')
+                            sheet_name = re.sub(r'[^\w\s-]', '', test_name)[:31]  # Max 31 caratteri per Excel
+                            df_test.to_excel(writer, index=False, sheet_name=sheet_name, startrow=0)
+                    except:
+                        continue
+        
+        buf.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', utente_nome).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        
+        filename = f"admin_tutti_test_{nome_sicuro}_{timestamp}.xlsx"
+        
+        logger.info(f"Admin {admin_email} downloaded all tests for user {user_email}")
+        
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Admin download all tests error: {e}")
+        return f"Errore durante il download: {e}", 500
 @app.route('/logout')
 def logout():
     session.clear()
