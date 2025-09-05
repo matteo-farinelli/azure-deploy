@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista Utenti - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg" style="background-color: {{ company_color }};">
+        <div class="container">
+            <a class="navbar-brand text-white" href="/admin/dashboard">
+                <i class="fas fa-shield-alt me-2"></i>Admin Dashboard
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text text-white me-3">
+                    <i class="fas fa-user me-1"></i>{{ admin_name }}
+                </span>
+                <a class="btn btn-outline-light btn-sm" href="/logout">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="/admin/dashboard" style="color: {{ company_color }};">
+                        <i class="fas fa-tachometer-alt me-1"></i>Dashboard Admin
+                    </a>
+                </li>
+                <li class="breadcrumb-item active">Lista Utenti</li>
+            </ol>
+        </nav>
+
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h2 class="mb-1">
+                                    <i class="fas fa-users me-2" style="color: {{ company_color }};"></i>
+                                    Lista Completa Utenti
+                                </h2>
+                                <p class="text-muted mb-0">Gestisci e visualizza tutti gli utenti registrati</p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="mb-0" style="color: {{ company_color }};">{{ total_users }}</h4>
+                                    <small class="text-muted">Utenti Totali</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtri -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Filtra per Azienda</label>
+                                <select class="form-select" id="filterAzienda" onchange="filterTable()">
+                                    <option value="">Tutte le aziende</option>
+                                    <option value="auxiell">Auxiell</option>
+                                    <option value="euxilia">Euxilia</option>
+                                    <option value="xva">XVA Services</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Filtra per Attività</label>
+                                <select class="form-select" id="filterActivity" onchange="filterTable()">
+                                    <option value="">Tutti gli utenti</option>
+                                    <option value="active">Con test completati</option>
+                                    <option value="inactive">Senza test</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Cerca Utente</label>
+                                <input type="text" class="form-control" id="searchUser" placeholder="Nome, cognome o email" onkeyup="filterTable()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabella Utenti -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header" style="background-color: {{ company_color }}; color: white;">
+                        <h5 class="mb-0">
+                            <i class="fas fa-table me-2"></i>
+                            Utenti Registrati
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="usersTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Utente</th>
+                                        <th>Azienda</th>
+                                        <th>Registrato</th>
+                                        <th>Ultimo Test</th>
+                                        <th>Test Totali</th>
+                                        <th>Media</th>
+                                        <th>Superati</th>
+                                        <th>Tipo</th>
+                                        <th class="text-center">Azioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users %}
+                                    <tr class="user-row" 
+                                        data-azienda="{{ user.azienda }}" 
+                                        data-activity="{% if user.total_tests > 0 %}active{% else %}inactive{% endif %}"
+                                        data-search="{{ user.nome_completo.lower() }} {{ user.email.lower() }}">
+                                        <td>
+                                            <div>
+                                                <strong>{{ user.nome_completo }}</strong>
+                                                <br>
+                                                <small class="text-muted">{{ user.email }}</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ user.azienda }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ user.created_at }}</small>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ user.last_test }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ user.total_tests }}</span>
+                                        </td>
+                                        <td>
+                                            {% if user.total_tests > 0 %}
+                                                <span class="badge 
+                                                    {% if user.avg_score >= 80 %}bg-success
+                                                    {% elif user.avg_score >= 60 %}bg-warning
+                                                    {% else %}bg-danger
+                                                    {% endif %}">
+                                                    {{ user.avg_score }}%
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if user.total_tests > 0 %}
+                                                {{ user.passed_tests }}/{{ user.total_tests }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if user.is_admin %}
+                                                <span class="badge bg-warning">Admin</span>
+                                            {% else %}
+                                                <span class="badge bg-primary">User</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="/admin/user/{{ user.email }}" 
+                                                   class="btn btn-outline-primary"
+                                                   title="Vedi dettagli utente">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if user.total_tests > 0 %}
+                                                <a href="/admin/download_all_user_tests/{{ user.email }}" 
+                                                   class="btn btn-outline-success"
+                                                   title="Scarica tutti i test">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="tableInfo">
+                                Mostrando {{ total_users }} utenti
+                            </small>
+                            <div>
+                                <a href="/admin/download_report" class="btn btn-success btn-sm">
+                                    <i class="fas fa-file-excel me-1"></i>Report Completo
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-5 py-4 bg-white border-top">
+        <div class="container text-center">
+            <small class="text-muted">
+                <i class="fas fa-shield-alt me-1"></i>
+                Admin Dashboard - Gestione utenti
+            </small>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function filterTable() {
+            const aziendaFilter = document.getElementById('filterAzienda').value.toLowerCase();
+            const activityFilter = document.getElementById('filterActivity').value;
+            const searchFilter = document.getElementById('searchUser').value.toLowerCase();
+            
+            const rows = document.querySelectorAll('.user-row');
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const azienda = row.getAttribute('data-azienda').toLowerCase();
+                const activity = row.getAttribute('data-activity');
+                const searchText = row.getAttribute('data-search');
+                
+                let showRow = true;
+                
+                // Filtra per azienda
+                if (aziendaFilter && azienda !== aziendaFilter) {
+                    showRow = false;
+                }
+                
+                // Filtra per attività
+                if (activityFilter && activity !== activityFilter) {
+                    showRow = false;
+                }
+                
+                // Filtra per ricerca
+                if (searchFilter && !searchText.includes(searchFilter)) {
+                    showRow = false;
+                }
+                
+                if (showRow) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Aggiorna contatore
+            document.getElementById('tableInfo').textContent = `Mostrando ${visibleCount} di {{ total_users }} utenti`;
+        }
+        
+        // Inizializza tooltip
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
