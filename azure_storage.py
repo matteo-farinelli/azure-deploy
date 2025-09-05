@@ -353,3 +353,36 @@ def azure_tables_health_check():
             'connection': 'failed',
             'timestamp': datetime.now().isoformat()
         }
+# Aggiungi queste funzioni al tuo azure_storage.py
+
+def save_test_result_azure_only(result):
+    """Salva risultato test con supporto per tentativi multipli"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            logger.error("❌ Impossibile connettersi ad Azure Tables")
+            return False
+
+        user_email = result.get('user_email', '')
+        created_at = result.get('created_at', datetime.now().isoformat())
+        
+        # Usa created_at come RowKey per garantire unicità
+        row_key = created_at.replace(':', '-').replace('.', '-')
+        
+        entity = {
+            'PartitionKey': user_email,
+            'RowKey': row_key,
+            'user_email': user_email,
+            'test_name': result.get('test_name', ''),
+            'azienda': result.get('azienda', ''),
+            'score': int(result.get('score', 0)),
+            'correct_answers': int(result.get('correct_answers', 0)),
+            'total_questions': int(result.get('total_questions', 0)),
+            'answers_json': result.get('answers_json', ''),
+            'completed_at': result.get('completed_at', ''),
+            'created_at': created_at,
+            'attempt_number': int(result.get('attempt_number', 1)),
+            'is_latest': result.get('is_latest', True)
+        }
+
+        service.create_entity(table_name=TABLE_NAME_RESULTS, entity=entity)
