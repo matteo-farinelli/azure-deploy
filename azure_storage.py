@@ -161,14 +161,16 @@ def save_test_result_azure_only(result):
             'is_latest': result.get('is_latest', True)
         }
 
-        service.create_entity(table_name=TABLE_NAME_RESULTS, entity=entity)
+        # Use upsert_entity instead of create_entity to handle duplicates
+        table_client = service.get_table_client(TABLE_NAME_RESULTS)
+        table_client.upsert_entity(entity)
+        
         logger.info(f"✅ Test result saved to Azure: {user_email} - {result.get('test_name')} (attempt {result.get('attempt_number', 1)})")
         return True
 
     except Exception as e:
         logger.error(f"❌ Error saving test result to Azure: {e}")
         return False
-
 
 def get_user_test_results_azure_only(email):
     """Recupera risultati test SOLO da Azure - NO fallback"""
