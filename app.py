@@ -275,7 +275,48 @@ def get_company_color(azienda):
 def hash_password(password):
     """Cripta la password usando SHA-256"""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
+def get_user_test_results_all_attempts_azure_only(user_email):
+    """Recupera TUTTI i tentativi di test da Azure per un utente specifico"""
+    try:
+        from azure_storage import get_table_service_with_retry, TABLE_NAME_RESULTS
+        
+        service = get_table_service_with_retry()
+        if not service:
+            logger.error("Azure Table service not available")
+            return []
+        
+        # Query per tutti i risultati dell'utente
+        filter_query = f"PartitionKey eq '{user_email}'"
+        
+        entities = service.query_entities(
+            table_name=TABLE_NAME_RESULTS,
+            query_filter=filter_query
+        )
+        
+        results = []
+        for entity in entities:
+            result = {
+                'user_email': entity.get('PartitionKey', ''),
+                'test_name': entity.get('test_name', ''),
+                'azienda': entity.get('azienda', ''),
+                'score': entity.get('score', 0),
+                'correct_answers': entity.get('correct_answers', 0),
+                'total_questions': entity.get('total_questions', 0),
+                'answers_json': entity.get('answers_json', ''),
+                'completed_at': entity.get('completed_at', ''),
+                'created_at': entity.get('created_at', ''),
+                'attempt_number': entity.get('attempt_number', 1),
+                'is_latest': entity.get('is_latest', True)
+            }
+            results.append(result)
+        
+        # Ordina per data di creazione (più recenti prima)
+        results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error getting all attempts for {user_email}: {e}")
+        return []
 def verify_password(stored_password, provided_password):
     """Verifica la password"""
     return stored_password == hash_password(provided_password)
@@ -729,7 +770,8 @@ def admin_reset_user_test(user_email, test_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # 2. Modifica la logica di controllo "test già completato" nella dashboard
-
+@app.route('/dashboard')
+@login_required 
 def dashboard():
     try:
         user_email = session.get('user_email')
