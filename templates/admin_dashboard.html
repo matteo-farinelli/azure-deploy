@@ -143,6 +143,71 @@
             </div>
         </div>
     </div>
+
+    <!-- Sezione Strumenti di Gestione (NUOVA) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tools me-2"></i>
+                        Strumenti di Gestione
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="/admin/users" class="btn btn-outline-primary w-100 h-100 d-flex flex-column justify-content-center align-items-center p-3">
+                                <i class="fas fa-users fa-2x mb-2"></i>
+                                <strong>Lista Utenti</strong>
+                                <small class="text-muted">Gestisci tutti gli utenti</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/admin/download_report" class="btn btn-outline-success w-100 h-100 d-flex flex-column justify-content-center align-items-center p-3">
+                                <i class="fas fa-file-excel fa-2x mb-2"></i>
+                                <strong>Report Completo</strong>
+                                <small class="text-muted">Scarica tutti i dati</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/admin/azure-status" class="btn btn-outline-info w-100 h-100 d-flex flex-column justify-content-center align-items-center p-3" target="_blank">
+                                <i class="fas fa-cloud fa-2x mb-2"></i>
+                                <strong>Status Azure</strong>
+                                <small class="text-muted">Verifica connessione</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="btn btn-outline-secondary w-100 h-100 d-flex flex-column justify-content-center align-items-center p-3">
+                                <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                <strong>Analytics</strong>
+                                <small class="text-muted">Prossimamente</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ricerca Utente Rapida (NUOVA) -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <h6>Cerca Utente Specifico</h6>
+                            <div class="input-group">
+                                <input type="email" 
+                                       class="form-control" 
+                                       id="searchUserEmail" 
+                                       placeholder="email@azienda.com">
+                                <button class="btn btn-outline-primary" 
+                                        type="button" 
+                                        onclick="goToUser()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">Inserisci l'email completa dell'utente</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Container Dinamico per le Viste -->
     <div id="dynamicContent">
@@ -163,7 +228,7 @@
                     </div>
                 </div>
                 
-                <!-- Test Recenti -->
+                <!-- Test Recenti CON LINK UTENTI (MODIFICATO) -->
                 <div class="col-md-6">
                     <div class="dashboard-card">
                         <h3 class="mb-3">
@@ -171,7 +236,76 @@
                             Test Recenti
                         </h3>
                         <div id="recentTestsList">
-                            <!-- Popolato dinamicamente -->
+                            <!-- VERSIONE AGGIORNATA CON LINK -->
+                            {% if recent_tests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Utente</th>
+                                                <th>Test</th>
+                                                <th>Punteggio</th>
+                                                <th>Data</th>
+                                                <th>Azienda</th>
+                                                <th class="text-center">Azioni</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for test in recent_tests %}
+                                            <tr>
+                                                <td>
+                                                    <strong>{{ test.user_name }}</strong>
+                                                    <br>
+                                                    <small class="text-muted">{{ test.user_email }}</small>
+                                                </td>
+                                                <td>{{ test.test_name }}</td>
+                                                <td>
+                                                    <span class="badge 
+                                                        {% if test.score >= 80 %}bg-success
+                                                        {% elif test.score >= 60 %}bg-warning
+                                                        {% else %}bg-danger
+                                                        {% endif %}">
+                                                        {{ test.score }}%
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">
+                                                        {% if test.completed_at %}
+                                                            {{ test.completed_at[:10] }}
+                                                        {% else %}
+                                                            N/A
+                                                        {% endif %}
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-secondary">{{ test.azienda }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <!-- Link per vedere tutti i test dell'utente -->
+                                                        <a href="/admin/user/{{ test.user_email }}" 
+                                                           class="btn btn-outline-primary"
+                                                           title="Vedi tutti i test di {{ test.user_name }}">
+                                                            <i class="fas fa-user"></i>
+                                                        </a>
+                                                        <!-- Link per scaricare questo test specifico -->
+                                                        <a href="/admin/download_user_test/{{ test.user_email }}/{{ test.test_name }}" 
+                                                           class="btn btn-outline-success"
+                                                           title="Scarica questo test">
+                                                            <i class="fas fa-download"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <p class="text-muted mb-0">Nessun test recente trovato.</p>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -327,7 +461,7 @@
         
     </div>
     
-    <!-- Azioni Admin -->
+    <!-- Azioni Admin (AGGIORNATE) -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="dashboard-card">
@@ -429,6 +563,23 @@ let userProgressChart = null;
 document.addEventListener('DOMContentLoaded', function() {
     loadInitialData();
     populateFilters();
+});
+
+// NUOVA FUNZIONE per andare all'utente
+function goToUser() {
+    const email = document.getElementById('searchUserEmail').value.trim();
+    if (email) {
+        window.location.href = `/admin/user/${encodeURIComponent(email)}`;
+    } else {
+        alert('Inserisci un\'email valida');
+    }
+}
+
+// Permetti invio con Enter
+document.getElementById('searchUserEmail').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        goToUser();
+    }
 });
 
 // Carica dati iniziali
@@ -709,7 +860,11 @@ function updateRecentTestsList() {
             <div class="list-group-item">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <h6 class="mb-1">${userName}</h6>
+                        <h6 class="mb-1">
+                            <a href="/admin/user/${test.user_email}" class="text-decoration-none">
+                                ${userName}
+                            </a>
+                        </h6>
                         <p class="mb-1 small">${test.test_name || 'Test Sconosciuto'}</p>
                         <small class="text-muted">
                             <i class="fas fa-calendar me-1"></i>${date}
@@ -722,6 +877,19 @@ function updateRecentTestsList() {
                         <span class="badge bg-${badgeClass} fs-6">${score}%</span>
                         <br>
                         <small class="text-muted">${test.correct_answers || 0}/${test.total_questions || 0}</small>
+                        <br>
+                        <div class="btn-group btn-group-sm mt-1" role="group">
+                            <a href="/admin/user/${test.user_email}" 
+                               class="btn btn-outline-primary btn-sm"
+                               title="Vedi utente">
+                                <i class="fas fa-user"></i>
+                            </a>
+                            <a href="/admin/download_user_test/${test.user_email}/${test.test_name}" 
+                               class="btn btn-outline-success btn-sm"
+                               title="Scarica test">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1396,6 +1564,7 @@ function updateUserDetailView() {
                         <th class="text-center">Punteggio</th>
                         <th class="text-center">Risposte Corrette</th>
                         <th class="text-center">Stato</th>
+                        <th class="text-center">Azioni</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1418,6 +1587,13 @@ function updateUserDetailView() {
                 <td class="text-center">${test.correct_answers || 0}/${test.total_questions || 0}</td>
                 <td class="text-center">
                     <span class="${statusClass}"><strong>${status}</strong></span>
+                </td>
+                <td class="text-center">
+                    <a href="/admin/download_user_test/${selectedUser}/${test.test_name}" 
+                       class="btn btn-sm btn-outline-success"
+                       title="Scarica questo test">
+                        <i class="fas fa-download"></i>
+                    </a>
                 </td>
             </tr>
         `;
@@ -1671,6 +1847,14 @@ document.addEventListener('DOMContentLoaded', function() {
             applyFilters();
         }
     });
+    
+    // Aggiungi tooltip per i pulsanti
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
 });
 
 // Cleanup grafici quando si cambia vista
