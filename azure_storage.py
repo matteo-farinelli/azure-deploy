@@ -386,3 +386,170 @@ def save_test_result_azure_only(result):
         }
 
         service.create_entity(table_name=TABLE_NAME_RESULTS, entity=entity)
+        logger.info(f"✅ Test result saved to Azure: {user_email} - {result.get('test_name')} (attempt {result.get('attempt_number', 1)})")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Error saving test result to Azure: {e}")
+        return False
+
+def get_all_test_results_azure_only():
+    """Recupera TUTTI i risultati test da Azure Tables (inclusi tentativi multipli)"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            return []
+
+        entities = service.query_entities(table_name=TABLE_NAME_RESULTS)
+        
+        results = []
+        for entity in entities:
+            result = {
+                'user_email': entity.get('PartitionKey', ''),
+                'test_name': entity.get('test_name', ''),
+                'azienda': entity.get('azienda', ''),
+                'score': entity.get('score', 0),
+                'correct_answers': entity.get('correct_answers', 0),
+                'total_questions': entity.get('total_questions', 0),
+                'answers_json': entity.get('answers_json', ''),
+                'completed_at': entity.get('completed_at', ''),
+                'created_at': entity.get('created_at', ''),
+                'attempt_number': entity.get('attempt_number', 1),
+                'is_latest': entity.get('is_latest', True)
+            }
+            results.append(result)
+
+        # Ordina per data di completamento
+        results.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
+        logger.info(f"✅ Retrieved {len(results)} test results from Azure")
+        return results
+
+    except Exception as e:
+        logger.error(f"❌ Error getting test results from Azure: {e}")
+        return []
+
+def get_user_test_results_azure_only(user_email):
+    """Recupera SOLO gli ultimi tentativi per ogni test dell'utente"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            return []
+
+        # Query per tutti i risultati dell'utente
+        filter_query = f"PartitionKey eq '{user_email}'"
+        entities = service.query_entities(
+            table_name=TABLE_NAME_RESULTS,
+            query_filter=filter_query
+        )
+        
+        # Raggruppa per test_name e prendi solo l'ultimo tentativo
+        latest_results = {}
+        for entity in entities:
+            test_name = entity.get('test_name', '')
+            attempt_number = entity.get('attempt_number', 1)
+            
+            if test_name not in latest_results or attempt_number > latest_results[test_name]['attempt_number']:
+                latest_results[test_name] = {
+                    'user_email': entity.get('PartitionKey', ''),
+                    'test_name': test_name,
+                    'azienda': entity.get('azienda', ''),
+                    'score': entity.get('score', 0),
+                    'correct_answers': entity.get('correct_answers', 0),
+                    'total_questions': entity.get('total_questions', 0),
+                    'answers_json': entity.get('answers_json', ''),
+                    'completed_at': entity.get('completed_at', ''),
+                    'created_at': entity.get('created_at', ''),
+                    'attempt_number': attempt_number,
+                    'is_latest': entity.get('is_latest', True)
+                }
+        
+        results = list(latest_results.values())
+        results.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
+        
+        logger.info(f"✅ Retrieved {len(results)} latest test results for {user_email}")
+        return results
+
+    except Exception as e:
+        logger.error(f"❌ Error getting user test results: {e}")
+        return []
+
+def get_user_test_results_all_attempts_azure_only(user_email, test_name=None):
+    """Recupera TUTTI i tentativi di test per un utente (inclusi tentativi precedenti)"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            return []
+
+        # Query per tutti i risultati dell'utente
+        if test_name:
+            filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}'"
+        else:
+            filter_query = f"PartitionKey eq '{user_email}'"
+            
+        entities = service.query_entities(
+            table_name=TABLE_NAME_RESULTS,
+            query_filter=filter_query
+        )
+        
+        results = []
+        for entity in entities:
+            result = {
+                'user_email': entity.get('PartitionKey', ''),
+                'test_name': entity.get('test_name', ''),
+                'azienda': entity.get('azienda', ''),
+                'score': entity.get('score', 0),
+                'correct_answers': entity.get('correct_answers', 0),
+                'total_questions': entity.get('total_questions', 0),
+                'answers_json': entity.get('answers_json', ''),
+                'completed_at': entity.get('completed_at', ''),
+                'created_at': entity.get('created_at', ''),
+                'attempt_number': entity.get('attempt_number', 1),
+                'is_latest': entity.get('is_latest', True)
+            }
+            results.append(result)
+        
+        # Ordina per attempt_number e data
+        results.sort(key=lambda x: (x.get('test_name', ''), x.get('attempt_number', 1)))
+        
+        logger.info(f"✅ Retrieved {len(results)} total attempts for {user_email}")
+        return results
+
+    except Exception as e:
+        logger.error(f"❌ Error getting all user test attempts: {e}")
+        return []
+
+def update_result_latest_status_azure_only(user_email, test_name, created_at, is_latest):
+    """Aggiorna lo status is_latest di un risultato specifico"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            return False
+
+        # Trova l'entità specifica usando created_at come RowKey
+        row_key = created_at.replace(':', '-').replace('.', '-')
+        
+        try:
+            entity = service.get_entity(
+                table_name=TABLE_NAME_RESULTS,
+                partition_key=user_email,
+                row_key=row_key
+            )
+            
+            # Aggiorna solo il campo is_latest
+            entity['is_latest'] = is_latest
+            
+            service.update_entity(
+                table_name=TABLE_NAME_RESULTS,
+                entity=entity
+            )
+            
+            logger.info(f"✅ Updated latest status for {user_email} - {test_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Entity not found or update failed: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Error updating latest status: {e}")
+        return False
