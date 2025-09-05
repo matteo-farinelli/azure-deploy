@@ -19,63 +19,74 @@
     </div>
     
     <!-- Filtri Dinamici -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-filter me-2"></i>Filtri Dinamici</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-2">
-                            <label class="form-label">Azienda</label>
-                            <select class="form-select" id="filterAzienda" onchange="applyFilters()">
-                                <option value="">Tutte le Aziende</option>
-                                <option value="auxiell">auxiell</option>
-                                <option value="euxilia">euxilia</option>
-                                <option value="xva">xva</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Tipo Test</label>
-                            <select class="form-select" id="filterTest" onchange="applyFilters()">
-                                <option value="">Tutti i Test</option>
-                                <!-- Opzioni dinamiche popolate via JS -->
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Utente Specifico</label>
-                            <select class="form-select" id="filterUser" onchange="applyFilters()">
-                                <option value="">Tutti gli Utenti</option>
-                                <!-- Opzioni dinamiche popolate via JS -->
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Periodo</label>
-                            <select class="form-select" id="filterPeriodo" onchange="applyFilters()">
-                                <option value="">Tutto il Periodo</option>
-                                <option value="30">Ultimi 30 giorni</option>
-                                <option value="90">Ultimi 3 mesi</option>
-                                <option value="365">Ultimo anno</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Vista</label>
-                            <select class="form-select" id="filterVista" onchange="changeView()">
-                                <option value="overview">Panoramica</option>
-                                <option value="by-company">Per Azienda</option>
-                                <option value="by-test">Per Tipo Test</option>
-                                <option value="timeline">Timeline</option>
-                                <option value="performance">Performance</option>
-                                <option value="user-detail">Dettaglio Utente</option>
-                            </select>
-                        </div>
+    <!-- Modifica la sezione Filtri Dinamici nel tuo admin_dashboard.html -->
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter me-2"></i>Filtri Dinamici</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label class="form-label">Azienda</label>
+                        <select class="form-select" id="filterAzienda" onchange="applyFilters()">
+                            <option value="">Tutte le Aziende</option>
+                            <option value="auxiell">auxiell</option>
+                            <option value="euxilia">euxilia</option>
+                            <option value="xva">xva</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo Test</label>
+                        <select class="form-select" id="filterTest" onchange="applyFilters()">
+                            <option value="">Tutti i Test</option>
+                            <!-- Opzioni dinamiche popolate via JS -->
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Utente Specifico</label>
+                        <select class="form-select" id="filterUser" onchange="applyFilters()">
+                            <option value="">Tutti gli Utenti</option>
+                            <!-- Opzioni dinamiche popolate via JS -->
+                        </select>
+                    </div>
+                    <!-- NUOVO FILTRO PER TEST RIFATTI -->
+                    <div class="col-md-2">
+                        <label class="form-label">Tentativi</label>
+                        <select class="form-select" id="filterRetry" onchange="applyFilters()">
+                            <option value="">Tutti i Tentativi</option>
+                            <option value="latest_only">Solo Ultimi Tentativi</option>
+                            <option value="first_only">Solo Primi Tentativi</option>
+                            <option value="retries_only">Solo Test Rifatti</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Periodo</label>
+                        <select class="form-select" id="filterPeriodo" onchange="applyFilters()">
+                            <option value="">Tutto il Periodo</option>
+                            <option value="30">Ultimi 30 giorni</option>
+                            <option value="90">Ultimi 3 mesi</option>
+                            <option value="365">Ultimo anno</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Vista</label>
+                        <select class="form-select" id="filterVista" onchange="changeView()">
+                            <option value="overview">Panoramica</option>
+                            <option value="by-company">Per Azienda</option>
+                            <option value="by-test">Per Tipo Test</option>
+                            <option value="timeline">Timeline</option>
+                            <option value="performance">Performance</option>
+                            <option value="user-detail">Dettaglio Utente</option>
+                        </select>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+</div>
     <!-- Statistiche Generali -->
     <div class="row mb-4" id="statsOverview">
         <div class="col-md-2 offset-md-1">
