@@ -405,12 +405,13 @@ def get_user_test_results_azure_only(user_email):
         if not service:
             return []
 
-        # Query per tutti i risultati dell'utente
+        # CORRETTO: Usa user_email come PartitionKey
         filter_query = f"PartitionKey eq '{user_email}'"
         entities = service.query_entities(
             table_name=TABLE_NAME_RESULTS,
             query_filter=filter_query
         )
+        
         
         # Raggruppa per test_name e prendi solo l'ultimo tentativo
         latest_results = {}
