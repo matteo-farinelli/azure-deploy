@@ -130,6 +130,136 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+def save_test_result(result):
+    """Salva risultato test con gestione tentativi multipli"""
+    try:
+        user_email = result.get('user_email')
+        test_name = result.get('test_name')
+        
+        if not user_email or not test_name:
+            logger.error("Missing user_email or test_name in result")
+            return False
+        
+        # Recupera risultati esistenti per questo utente e test
+        existing_results = get_user_test_results_all_attempts(user_email, test_name)
+        
+        # Calcola il numero del tentativo
+        attempt_number = len(existing_results) + 1
+        
+        # Aggiungi metadati al risultato
+        result.update({
+            'attempt_number': attempt_number,
+            'is_latest': True,
+            'created_at': datetime.now().isoformat(),
+            'completed_at': result.get('completed_at', datetime.now().isoformat())
+        })
+        
+        # Marca i risultati precedenti come non più "latest"
+        if existing_results:
+            for old_result in existing_results:
+                update_result_latest_status(user_email, test_name, old_result.get('created_at'), False)
+        
+        # Salva il nuovo risultato
+        return save_test_result_azure_only(result)
+        
+    except Exception as e:
+        logger.error(f"Error saving test result: {e}")
+        return False
+
+def get_user_test_results_all_attempts(user_email, test_name=None):
+    """Recupera TUTTI i tentativi di test per un utente"""
+    try:
+        from azure_storage import get_table_service_with_retry, TABLE_NAME_RESULTS
+        
+        service = get_table_service_with_retry()
+        if not service:
+            return []
+        
+        # Query per tutti i risultati dell'utente
+        if test_name:
+            filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}'"
+        else:
+            filter_query = f"PartitionKey eq '{user_email}'"
+        
+        entities = service.query_entities(
+            table_name=TABLE_NAME_RESULTS,
+            query_filter=filter_query
+        )
+        
+        results = []
+        for entity in entities:
+            result = {
+                'user_email': entity.get('PartitionKey', ''),
+                'test_name': entity.get('test_name', ''),
+                'azienda': entity.get('azienda', ''),
+                'score': entity.get('score', 0),
+                'correct_answers': entity.get('correct_answers', 0),
+                'total_questions': entity.get('total_questions', 0),
+                'answers_json': entity.get('answers_json', ''),
+                'completed_at': entity.get('completed_at', ''),
+                'created_at': entity.get('created_at', ''),
+                'attempt_number': entity.get('attempt_number', 1),
+                'is_latest': entity.get('is_latest', True)
+            }
+            results.append(result)
+        
+        # Ordina per data di creazione
+        results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error getting all test attempts: {e}")
+        return []
+
+def get_user_test_results_latest_only(user_email):
+    """Recupera solo gli ultimi tentativi per ogni test"""
+    try:
+        all_results = get_user_test_results_all_attempts(user_email)
+        
+        # Filtra solo i risultati "latest"
+        latest_results = [r for r in all_results if r.get('is_latest', True)]
+        return latest_results
+        
+    except Exception as e:
+        logger.error(f"Error getting latest test results: {e}")
+        return []
+
+def update_result_latest_status(user_email, test_name, created_at, is_latest):
+    """Aggiorna lo status is_latest di un risultato specifico"""
+    try:
+        from azure_storage import get_table_service_with_retry, TABLE_NAME_RESULTS
+        
+        service = get_table_service_with_retry()
+        if not service:
+            return False
+        
+        # Trova l'entità specifica usando created_at come RowKey
+        row_key = created_at.replace(':', '-').replace('.', '-')
+        
+        try:
+            entity = service.get_entity(
+                table_name=TABLE_NAME_RESULTS,
+                partition_key=user_email,
+                row_key=row_key
+            )
+            
+            # Aggiorna solo il campo is_latest
+            entity['is_latest'] = is_latest
+            
+            service.update_entity(
+                table_name=TABLE_NAME_RESULTS,
+                entity=entity
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Entity not found or update failed: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error updating latest status: {e}")
+        return False
 
 def get_logo_info(azienda_scelta=None):
     if azienda_scelta is None:
@@ -575,7 +705,178 @@ def register():
     return render_template('register.html',
                           azienda='auxiell',
                           company_color='#6C757D')
+@app.route('/admin/reset_user_test/<user_email>/<test_name>', methods=['POST'])
+@login_required
+def admin_reset_user_test(user_email, test_name):
+    """Riabilita un test permettendo un nuovo tentativo"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return jsonify({'success': False, 'error': 'Accesso negato'}), 403
+    
+    try:
+        # Verifica che l'utente abbia effettivamente completato questo test
+        existing_results = get_user_test_results_all_attempts(user_email, test_name)
+        
+        if not existing_results:
+            return jsonify({'success': False, 'error': 'Test non trovato per questo utente'}), 404
+        
+        # Non eliminiamo nulla, semplicemente permettiamo un nuovo tentativo
+        # La logica di controllo "test già completato" deve essere modificata
+        
+        logger.info(f"Admin {admin_email} enabled retry for test '{test_name}' for user {user_email}")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Test "{test_name}" riabilitato per {user_email}. Potrà eseguire un nuovo tentativo.',
+            'attempts_count': len(existing_results)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error resetting test {test_name} for {user_email}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+# 2. Modifica la logica di controllo "test già completato" nella dashboard
+
+def dashboard():
+    try:
+        user_email = session.get('user_email')
+        azienda = session.get('azienda_scelta')
+
+        # Recupera solo gli ultimi tentativi per ogni test
+        completed_tests = get_user_test_results_latest_only(user_email)
+        
+        available_tests = []
+        completed_test_names = [test['test_name'] for test in completed_tests]
+
+        try:
+            # Path assoluto per Azure
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            tipologie_file = os.path.join(base_dir, "repository_test", "Tipologia Test.xlsx")
+
+            if os.path.exists(tipologie_file):
+                df_tipologie = pd.read_excel(tipologie_file)
+
+                if "Nome test" in df_tipologie.columns:
+                    
+                    def azienda_match(azienda_cell, azienda_utente):
+                        """Controlla se l'azienda dell'utente è presente nella cella"""
+                        if pd.isna(azienda_cell) or not azienda_cell:
+                            return False
+                        
+                        aziende_test = [a.strip().lower() for a in str(azienda_cell).split(";")]
+                        return azienda_utente.lower() in aziende_test
+
+                    for _, row in df_tipologie.iterrows():
+                        test_name = row["Nome test"]
+
+                        test_available = True
+                        if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
+                            test_available = azienda_match(row["Azienda"], azienda)
+
+                        if test_available:
+                            # MODIFICA: Controlla se ci sono tentativi multipli consentiti
+                            is_completed = test_name in completed_test_names
+                            
+                            # Verifica se sono consentiti tentativi multipli (nuova logica)
+                            can_retry = check_if_test_allows_retry(user_email, test_name)
+                            
+                            available_tests.append({
+                                'name': test_name,
+                                'completed': is_completed,
+                                'can_attempt': not is_completed or can_retry,
+                                'attempts_count': count_user_test_attempts(user_email, test_name)
+                            })
+                            
+        except Exception as e:
+            logger.error(f"Error loading tests: {e}")
+
+        logo_path, logo_exists = get_logo_info(azienda)
+        company_color = get_company_color(azienda)
+
+        return render_template('dashboard.html',
+                             completed_tests=completed_tests,
+                             available_tests=available_tests,
+                             utente=session.get('utente'),
+                             azienda=azienda,
+                             logo_path=logo_path if logo_exists else None,
+                             company_color=company_color)
+
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return render_template('error.html', error=f'Errore dashboard: {e}')
+
+def check_if_test_allows_retry(user_email, test_name):
+    """Controlla se un test consente nuovi tentativi (logica business)"""
+    # Implementa qui la tua logica di business
+    # Per ora, consenti sempre retry se l'admin non ha impostato limitazioni
+    
+    # Puoi aggiungere un campo nella tabella "tests_settings" per controllare questo
+    # O basarti su regole specifiche per tipo di test
+    
+    return True  # Per ora consenti sempre
+
+def count_user_test_attempts(user_email, test_name):
+    """Conta il numero di tentativi per un test specifico"""
+    try:
+        attempts = get_user_test_results_all_attempts(user_email, test_name)
+        return len(attempts)
+    except:
+        return 0
+
+# 3. Modifica la funzione start_test per gestire tentativi multipli
+
+@app.route('/start_test/<test_name>')
+@login_required
+def start_test(test_name):
+    user_email = session.get('user_email')
+
+    # NUOVA LOGICA: Verifica se può tentare (invece di bloccare se completato)
+    latest_results = get_user_test_results_latest_only(user_email)
+    completed_test_names = [test['test_name'] for test in latest_results]
+    
+    if test_name in completed_test_names:
+        # Controlla se può ritentare
+        can_retry = check_if_test_allows_retry(user_email, test_name)
+        if not can_retry:
+            attempts_count = count_user_test_attempts(user_email, test_name)
+            return render_template('error.html', 
+                                 error=f'Hai già completato il test "{test_name}" ({attempts_count} tentativi). Non sono consentiti ulteriori tentativi.',
+                                 show_dashboard_button=True)
+
+    # Se può procedere, continua normalmente
+    session["test_scelto"] = test_name
+    session["proseguito"] = False
+    session["submitted"] = False
+    session["domande_selezionate"] = None
+
+    try:
+        # Resto della logica esistente...
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        tipologie_file = os.path.join(base_dir, "repository_test", "Tipologia Test.xlsx")
+
+        df_tipologie = pd.read_excel(tipologie_file)
+        file_row = df_tipologie[df_tipologie["Nome test"] == test_name]
+
+        if len(file_row) > 0:
+            if "Tutte" in file_row.columns:
+                tutte_value = str(file_row["Tutte"].values[0]).strip().lower()
+                session["tutte_domande"] = tutte_value == "si"
+            else:
+                session["tutte_domande"] = False
+
+            if "Percorso file" in file_row.columns:
+                file_path = file_row["Percorso file"].values[0]
+                session["file_path"] = os.path.join(base_dir, file_path)
+            else:
+                session["file_path"] = os.path.join(base_dir, "repository_test", f"{test_name}.xlsx")
+
+        session.modified = True
+        return redirect(url_for('quiz'))
+
+    except Exception as e:
+        logger.error(f"Error starting test: {e}")
+        return render_template('error.html', error=f'Errore caricamento test: {e}')
 @app.route('/dashboard')
 @login_required 
 def dashboard():
