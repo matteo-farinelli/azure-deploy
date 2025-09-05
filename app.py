@@ -1497,54 +1497,6 @@ def status():
     """Endpoint semplificato per Azure health probe"""
     return "OK", 200
 
-@app.route('/start_test/<test_name>')
-@login_required
-def start_test(test_name):
-    user_email = session.get('user_email')
-
-    # Verifica se l'utente ha già completato questo test
-    completed_tests = get_user_test_results(user_email)
-    completed_test_names = [test['test_name'] for test in completed_tests]
-
-    if test_name in completed_test_names:
-        return render_template('error.html', 
-                             error=f'Hai già completato il test "{test_name}". Ogni test può essere svolto una sola volta.',
-                             show_dashboard_button=True)
-
-    # Se non completato, procedi normalmente
-    session["test_scelto"] = test_name
-    session["proseguito"] = False
-    session["submitted"] = False
-    session["domande_selezionate"] = None
-
-    try:
-        # Path assoluto per Azure
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        tipologie_file = os.path.join(base_dir, "repository_test", "Tipologia Test.xlsx")
-
-        df_tipologie = pd.read_excel(tipologie_file)
-        file_row = df_tipologie[df_tipologie["Nome test"] == test_name]
-
-        if len(file_row) > 0:
-            if "Tutte" in file_row.columns:
-                tutte_value = str(file_row["Tutte"].values[0]).strip().lower()
-                session["tutte_domande"] = tutte_value == "si"
-            else:
-                session["tutte_domande"] = False
-
-            if "Percorso file" in file_row.columns:
-                file_path = file_row["Percorso file"].values[0]
-                # Converti path relativo in assoluto
-                session["file_path"] = os.path.join(base_dir, file_path)
-            else:
-                session["file_path"] = os.path.join(base_dir, "repository_test", f"{test_name}.xlsx")
-
-        session.modified = True
-        return redirect(url_for('quiz'))
-
-    except Exception as e:
-        logger.error(f"Error starting test: {e}")
-        return render_template('error.html', error=f'Errore caricamento test: {e}')
 
 @app.route('/quiz')
 @login_required
