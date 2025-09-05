@@ -593,26 +593,6 @@ document.getElementById('searchUserEmail').addEventListener('keypress', function
     }
 });
 
-// Carica dati iniziali
-async function loadInitialData() {
-    showLoading(true);
-    try {
-        // Carica dati dal server (usando i dati passati dal template)
-        allData.users = {{ stats_per_azienda|tojson if stats_per_azienda else '{}' }};
-        allData.testResults = {{ recent_tests|tojson if recent_tests else '[]' }};
-        allData.filteredData = allData.testResults;
-        
-        // Popola la vista iniziale
-        updateOverviewView();
-        
-    } catch (error) {
-        console.error('Errore caricamento dati:', error);
-        showAlert('Errore nel caricamento dei dati', 'danger');
-    } finally {
-        showLoading(false);
-    }
-}
-
 // Popola tutti i filtri dinamicamente
 function populateFilters() {
     populateTestFilters();
@@ -707,7 +687,256 @@ function applyFilters() {
     allData.filteredData = filtered;
     updateCurrentView();
 }
+function applyFilters() {
+    const azienda = document.getElementById('filterAzienda').value;
+    const test = document.getElementById('filterTest').value;
+    const user = document.getElementById('filterUser').value;
+    const retry = document.getElementById('filterRetry').value;  // NUOVO
+    const periodo = document.getElementById('filterPeriodo').value;
+    
+    let filtered = allData.testResults;
+    
+    // Filtro azienda
+    if (azienda) {
+        filtered = filtered.filter(item => item.azienda === azienda);
+    }
+    
+    // Filtro test
+    if (test) {
+        filtered = filtered.filter(item => item.test_name === test);
+    }
+    
+    // Filtro utente
+    if (user) {
+        filtered = filtered.filter(item => item.user_email === user);
+    }
+    
+    // NUOVO FILTRO: Tentativi
+    if (retry) {
+        switch(retry) {
+            case 'latest_only':
+                // Mostra solo l'ultimo tentativo per ogni combinazione utente-test
+                filtered = filterLatestAttempts(filtered);
+                break;
+            case 'first_only':
+                // Mostra solo il primo tentativo per ogni combinazione utente-test
+                filtered = filterFirstAttempts(filtered);
+                break;
+            case 'retries_only':
+                // Mostra solo i test che sono stati rifatti (attempt_number > 1)
+                filtered = filtered.filter(item => (item.attempt_number || 1) > 1);
+                break;
+        }
+    }
+    
+    // Filtro periodo
+    if (periodo) {
+        const daysAgo = parseInt(periodo);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+        
+        filtered = filtered.filter(item => {
+            if (item.completed_at) {
+                const testDate = new Date(item.completed_at);
+                return testDate >= cutoffDate;
+            }
+            return false;
+        });
+    }
+    
+    allData.filteredData = filtered;
+    updateCurrentView();
+}
 
+// NUOVE FUNZIONI per gestire i filtri dei tentativi
+
+function filterLatestAttempts(data) {
+    const latest = {};
+    
+    data.forEach(item => {
+        const key = `${item.user_email}_${item.test_name}`;
+        const attemptNumber = item.attempt_number || 1;
+        
+        if (!latest[key] || attemptNumber > (latest[key].attempt_number || 1)) {
+            latest[key] = item;
+        }
+    });
+    
+    return Object.values(latest);
+}
+
+function filterFirstAttempts(data) {
+    const first = {};
+    
+    data.forEach(item => {
+        const key = `${item.user_email}_${item.test_name}`;
+        const attemptNumber = item.attempt_number || 1;
+        
+        if (!first[key] || attemptNumber < (first[key].attempt_number || 1)) {
+            first[key] = item;
+        }
+    });
+    
+    return Object.values(first);
+}
+function updateRecentTestsList() {
+    const container = document.getElementById('recentTestsList');
+    const data = allData.filteredData.slice(0, 10); // Solo ultimi 10
+    
+    if (data.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Nessun test trovato</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="list-group list-group-flush">';
+    
+    data.forEach(test => {
+        const score = test.score || 0;
+        const badgeClass = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
+        const date = test.completed_at ? test.completed_at.split('T')[0] : 'N/A';
+        const userName = test.user_name || extractNameFromEmail(test.user_email || '');
+        const attemptNumber = test.attempt_number || 1;
+        const isLatest = test.is_latest !== false; // Default true se non specificato
+        
+        // Badge per i tentativi
+        let attemptBadge = '';
+        if (attemptNumber > 1) {
+            attemptBadge = `<span class="badge bg-info ms-1" title="Tentativo numero ${attemptNumber}">T${attemptNumber}</span>`;
+        }
+        if (!isLatest) {
+            attemptBadge += `<span class="badge bg-secondary ms-1" title="Non è l'ultimo tentativo">Precedente</span>`;
+        }
+        
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">
+                            <a href="/admin/user/${test.user_email}" class="text-decoration-none">
+                                ${userName}
+                            </a>
+                            ${attemptBadge}
+                        </h6>
+                        <p class="mb-1 small">${test.test_name || 'Test Sconosciuto'}</p>
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>${date}
+                            <span class="ms-2">
+                                <i class="fas fa-building me-1"></i>${test.azienda || 'N/A'}
+                            </span>
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-${badgeClass} fs-6">${score}%</span>
+                        <br>
+                        <small class="text-muted">${test.correct_answers || 0}/${test.total_questions || 0}</small>
+                        <br>
+                        <div class="btn-group btn-group-sm mt-1" role="group">
+                            <a href="/admin/user/${test.user_email}" 
+                               class="btn btn-outline-primary btn-sm"
+                               title="Vedi utente">
+                                <i class="fas fa-user"></i>
+                            </a>
+                            <a href="/admin/download_user_test/${test.user_email}/${test.test_name}" 
+                               class="btn btn-outline-success btn-sm"
+                               title="Scarica test">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            ${isLatest && attemptNumber === 1 ? 
+                                `<button class="btn btn-outline-warning btn-sm" 
+                                         onclick="resetUserTest('${test.user_email}', '${test.test_name}')"
+                                         title="Riabilita test">
+                                    <i class="fas fa-redo"></i>
+                                </button>` 
+                                : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// NUOVA FUNZIONE per riabilitare test
+
+function resetUserTest(userEmail, testName) {
+    if (!confirm(`Sei sicuro di voler riabilitare il test "${testName}" per l'utente ${userEmail}?\n\nL'utente potrà eseguire un nuovo tentativo.`)) {
+        return;
+    }
+    
+    // Mostra loading
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+    
+    fetch(`/admin/reset_user_test/${encodeURIComponent(userEmail)}/${encodeURIComponent(testName)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`
+                <strong>Test Riabilitato!</strong><br>
+                ${data.message}
+            `, 'success');
+            
+            // Ricarica i dati dopo 2 secondi
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(`<strong>Errore:</strong><br>${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert(`<strong>Errore di rete:</strong><br>${error.message}`, 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    });
+}
+
+// Aggiorna anche la funzione loadInitialData per caricare i dati con attempt_number
+
+async function loadInitialData() {
+    showLoading(true);
+    try {
+        // I dati dal template potrebbero non avere attempt_number, aggiungilo come default
+        allData.users = {{ stats_per_azienda|tojson if stats_per_azienda else '{}' }};
+        allData.testResults = {{ recent_tests|tojson if recent_tests else '[]' }};
+        
+        // Aggiungi attempt_number se mancante (compatibilità)
+        allData.testResults = allData.testResults.map(test => ({
+            ...test,
+            attempt_number: test.attempt_number || 1,
+            is_latest: test.is_latest !== false
+        }));
+        
+        allData.filteredData = allData.testResults;
+        
+        // Popola la vista iniziale
+        updateOverviewView();
+        
+    } catch (error) {
+        console.error('Errore caricamento dati:', error);
+        showAlert('Errore nel caricamento dei dati', 'danger');
+    } finally {
+        showLoading(false);
+    }
+}
 // Cambia vista
 function changeView() {
     const vista = document.getElementById('filterVista').value;
@@ -844,72 +1073,7 @@ function updateCompanyStatsTable() {
     container.innerHTML = html;
 }
 
-// Aggiorna lista test recenti
-function updateRecentTestsList() {
-    const container = document.getElementById('recentTestsList');
-    const data = allData.filteredData.slice(0, 10); // Solo ultimi 10
-    
-    if (data.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                <p class="text-muted">Nessun test trovato</p>
-            </div>
-        `;
-        return;
-    }
-    
-    let html = '<div class="list-group list-group-flush">';
-    
-    data.forEach(test => {
-        const score = test.score || 0;
-        const badgeClass = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
-        const date = test.completed_at ? test.completed_at.split('T')[0] : 'N/A';
-        const userName = test.user_name || extractNameFromEmail(test.user_email || '');
-        
-        html += `
-            <div class="list-group-item">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">
-                            <a href="/admin/user/${test.user_email}" class="text-decoration-none">
-                                ${userName}
-                            </a>
-                        </h6>
-                        <p class="mb-1 small">${test.test_name || 'Test Sconosciuto'}</p>
-                        <small class="text-muted">
-                            <i class="fas fa-calendar me-1"></i>${date}
-                            <span class="ms-2">
-                                <i class="fas fa-building me-1"></i>${test.azienda || 'N/A'}
-                            </span>
-                        </small>
-                    </div>
-                    <div class="text-end">
-                        <span class="badge bg-${badgeClass} fs-6">${score}%</span>
-                        <br>
-                        <small class="text-muted">${test.correct_answers || 0}/${test.total_questions || 0}</small>
-                        <br>
-                        <div class="btn-group btn-group-sm mt-1" role="group">
-                            <a href="/admin/user/${test.user_email}" 
-                               class="btn btn-outline-primary btn-sm"
-                               title="Vedi utente">
-                                <i class="fas fa-user"></i>
-                            </a>
-                            <a href="/admin/download_user_test/${test.user_email}/${test.test_name}" 
-                               class="btn btn-outline-success btn-sm"
-                               title="Scarica test">
-                                <i class="fas fa-download"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    container.innerHTML = html;
-}
+
 
 // Vista per azienda
 function updateCompanyView() {
