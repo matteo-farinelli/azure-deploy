@@ -1,237 +1,207 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dettagli Utente - {{ user_name }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg" style="background-color: {{ company_color }};">
-        <div class="container">
-            <a class="navbar-brand text-white" href="/admin/dashboard">
-                <i class="fas fa-shield-alt me-2"></i>Admin Dashboard
-            </a>
-            <div class="navbar-nav ms-auto">
-                <span class="navbar-text text-white me-3">
-                    <i class="fas fa-user me-1"></i>{{ admin_name }}
-                </span>
-                <a class="btn btn-outline-light btn-sm" href="/logout">
-                    <i class="fas fa-sign-out-alt me-1"></i>Logout
-                </a>
+<!-- Aggiorna la sezione della tabella test nel tuo admin_user_details.html -->
+
+<!-- Lista Test CON TENTATIVI MULTIPLI -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header" style="background-color: {{ company_color }}; color: white;">
+                <h5 class="mb-0">
+                    <i class="fas fa-list-alt me-2"></i>
+                    Tutti i Test e Tentativi ({{ total_attempts }})
+                    <small class="ms-2">- Test Unici: {{ total_tests }}</small>
+                </h5>
             </div>
-        </div>
-    </nav>
-
-    <div class="container mt-4">
-        <!-- Breadcrumb -->
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item">
-                    <a href="/admin/dashboard" style="color: {{ company_color }};">
-                        <i class="fas fa-tachometer-alt me-1"></i>Dashboard Admin
-                    </a>
-                </li>
-                <li class="breadcrumb-item active">{{ user_name }}</li>
-            </ol>
-        </nav>
-
-        <!-- Header Utente -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-md-8">
-                                <h2 class="mb-1">
-                                    <i class="fas fa-user-circle me-2" style="color: {{ company_color }};"></i>
-                                    {{ user_name }}
-                                </h2>
-                                <p class="text-muted mb-2">
-                                    <i class="fas fa-envelope me-1"></i>{{ user_email }}
-                                </p>
-                                <div class="row">
-                                    <div class="col-sm-6">
+            <div class="card-body p-0">
+                {% if test_results %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><i class="fas fa-clipboard-list me-1"></i>Nome Test</th>
+                                    <th><i class="fas fa-hashtag me-1"></i>Tentativo</th>
+                                    <th><i class="fas fa-calendar me-1"></i>Data Completamento</th>
+                                    <th><i class="fas fa-percentage me-1"></i>Punteggio</th>
+                                    <th><i class="fas fa-check-circle me-1"></i>Risultato</th>
+                                    <th><i class="fas fa-building me-1"></i>Azienda</th>
+                                    <th><i class="fas fa-info-circle me-1"></i>Stato</th>
+                                    <th class="text-center"><i class="fas fa-cog me-1"></i>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for test in test_results %}
+                                <tr class="{% if not test.is_latest %}table-secondary{% endif %}">
+                                    <td>
+                                        <strong>{{ test.test_name }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if test.attempt_number == 1 %}bg-primary{% else %}bg-info{% endif %}">
+                                            #{{ test.attempt_number }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ test.completed_at }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if test.score >= 80 %}bg-success
+                                            {% elif test.score >= 60 %}bg-warning
+                                            {% else %}bg-danger
+                                            {% endif %}">
+                                            {{ test.score }}%
+                                        </span>
+                                    </td>
+                                    <td>
                                         <small class="text-muted">
-                                            <i class="fas fa-building me-1"></i>
-                                            <strong>Azienda:</strong> {{ user_data.azienda|title }}
+                                            {{ test.correct_answers }}/{{ test.total_questions }}
                                         </small>
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <small class="text-muted">
-                                            <i class="fas fa-calendar-plus me-1"></i>
-                                            <strong>Registrato:</strong> 
-                                            {% if user_data.created_at %}
-                                                {{ user_data.created_at[:10] }}
-                                            {% else %}
-                                                N/A
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ test.azienda }}</span>
+                                    </td>
+                                    <td>
+                                        {% if test.is_latest %}
+                                            <span class="badge bg-success">Ultimo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Precedente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <!-- Download sempre disponibile -->
+                                            <a href="/admin/download_user_test/{{ user_email }}/{{ test.test_name }}" 
+                                               class="btn btn-outline-success"
+                                               title="Scarica questo tentativo">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                            
+                                            <!-- Riabilita solo se è l'ultimo tentativo -->
+                                            {% if test.is_latest %}
+                                            <button class="btn btn-outline-warning" 
+                                                    onclick="resetUserTest('{{ user_email }}', '{{ test.test_name }}')"
+                                                    title="Riabilita test per nuovo tentativo">
+                                                <i class="fas fa-redo"></i>
+                                            </button>
                                             {% endif %}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4 text-end">
-                                <div class="bg-light rounded p-3">
-                                    <h4 class="mb-0" style="color: {{ company_color }};">{{ total_tests }}</h4>
-                                    <small class="text-muted">Test Completati</small>
-                                </div>
-                            </div>
-                        </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nessun test completato</h5>
+                        <p class="text-muted">Questo utente non ha ancora completato alcun test.</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
-
-        <!-- Azioni Rapide -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="fas fa-download me-2"></i>Download Completo
-                        </h5>
-                        <p class="text-muted mb-3">Scarica tutti i test di questo utente in un unico file Excel</p>
-                        <a href="/admin/download_all_user_tests/{{ user_email }}" 
-                           class="btn btn-lg" 
-                           style="background-color: {{ company_color }}; border-color: {{ company_color }}; color: white;">
-                            <i class="fas fa-file-excel me-2"></i>
-                            Scarica Tutti i Test ({{ total_tests }})
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lista Test -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header" style="background-color: {{ company_color }}; color: white;">
-                        <h5 class="mb-0">
-                            <i class="fas fa-list-alt me-2"></i>
-                            Test Completati ({{ total_tests }})
-                        </h5>
-                    </div>
-                    <div class="card-body p-0">
-                        {% if test_results %}
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th><i class="fas fa-clipboard-list me-1"></i>Nome Test</th>
-                                            <th><i class="fas fa-calendar me-1"></i>Data Completamento</th>
-                                            <th><i class="fas fa-percentage me-1"></i>Punteggio</th>
-                                            <th><i class="fas fa-check-circle me-1"></i>Risultato</th>
-                                            <th><i class="fas fa-building me-1"></i>Azienda</th>
-                                            <th class="text-center"><i class="fas fa-cog me-1"></i>Azioni</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for test in test_results %}
-                                        <tr>
-                                            <td>
-                                                <strong>{{ test.test_name }}</strong>
-                                            </td>
-                                            <td>
-                                                <small class="text-muted">{{ test.completed_at }}</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge 
-                                                    {% if test.score >= 80 %}bg-success
-                                                    {% elif test.score >= 60 %}bg-warning
-                                                    {% else %}bg-danger
-                                                    {% endif %}">
-                                                    {{ test.score }}%
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <small class="text-muted">
-                                                    {{ test.correct_answers }}/{{ test.total_questions }}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-secondary">{{ test.azienda }}</span>
-                                            </td>
-                                            <td class="text-center">
-                                                <a href="/admin/download_user_test/{{ user_email }}/{{ test.test_name }}" 
-                                                   class="btn btn-sm btn-outline-primary"
-                                                   title="Scarica questo test">
-                                                    <i class="fas fa-download"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="text-center py-5">
-                                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">Nessun test completato</h5>
-                                <p class="text-muted">Questo utente non ha ancora completato alcun test.</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Statistiche Rapide (se ci sono test) -->
-        {% if test_results %}
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h3 style="color: {{ company_color }};">
-                            {% set total_score = test_results | sum(attribute='score') %}
-                            {% if test_results | length > 0 %}
-                                {{ (total_score / (test_results | length)) | round(1) }}%
-                            {% else %}
-                                0%
-                            {% endif %}
-                        </h3>
-                        <small class="text-muted">Punteggio Medio</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h3 style="color: {{ company_color }};">
-                            {% set passed_tests = test_results | selectattr('score', 'ge', 60) | list %}
-                            {{ passed_tests | length }}
-                        </h3>
-                        <small class="text-muted">Test Superati (≥60%)</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h3 style="color: {{ company_color }};">
-                            {% set total_questions = test_results | sum(attribute='total_questions') %}
-                            {{ total_questions }}
-                        </h3>
-                        <small class="text-muted">Domande Totali</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
+</div>
 
-    <!-- Footer -->
-    <footer class="mt-5 py-4 bg-white border-top">
-        <div class="container text-center">
-            <small class="text-muted">
-                <i class="fas fa-shield-alt me-1"></i>
-                Admin Dashboard - Visualizzazione dettagli utente
-            </small>
+<!-- Statistiche Aggiornate -->
+{% if latest_test_results %}
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 style="color: {{ company_color }};">{{ total_tests }}</h3>
+                <small class="text-muted">Test Unici Completati</small>
+            </div>
         </div>
-    </footer>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 style="color: {{ company_color }};">{{ total_attempts }}</h3>
+                <small class="text-muted">Tentativi Totali</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 style="color: {{ company_color }};">
+                    {% set total_score = latest_test_results | sum(attribute='score') %}
+                    {% if latest_test_results | length > 0 %}
+                        {{ (total_score / (latest_test_results | length)) | round(1) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </h3>
+                <small class="text-muted">Punteggio Medio (Ultimi)</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h3 style="color: {{ company_color }};">
+                    {% set passed_tests = latest_test_results | selectattr('score', 'ge', 60) | list %}
+                    {{ passed_tests | length }}
+                </h3>
+                <small class="text-muted">Test Superati (≥60%)</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<script>
+// Funzione per riabilitare test
+function resetUserTest(userEmail, testName) {
+    if (!confirm(`Sei sicuro di voler riabilitare il test "${testName}" per l'utente ${userEmail}?\n\nL'utente potrà eseguire un nuovo tentativo.`)) {
+        return;
+    }
+    
+    // Mostra loading
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+    
+    fetch(`/admin/reset_user_test/${encodeURIComponent(userEmail)}/${encodeURIComponent(testName)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostra alert di successo
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <strong>Test Riabilitato!</strong><br>
+                ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            // Inserisci l'alert in cima alla pagina
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss dopo 5 secondi
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+            
+        } else {
+            alert(`Errore: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert(`Errore di rete: ${error.message}`);
+    })
+    .finally(() => {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    });
+}
+</script>
