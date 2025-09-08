@@ -113,10 +113,10 @@ def check_if_test_allows_retry(user_email, test_name):
         if not service:
             return False
         
-        # Cerca se esiste un flag di riabilitazione per questo utente/test
-        table_client = service.get_table_client('testresets')
-        
         try:
+            # Cerca se esiste un flag di riabilitazione per questo utente/test
+            table_client = service.get_table_client('testresets')
+            
             # Cerca un flag attivo per questo utente/test
             filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
             entities = list(table_client.query_entities(query_filter=filter_query))
@@ -126,13 +126,17 @@ def check_if_test_allows_retry(user_email, test_name):
             return has_active_flag
             
         except Exception as e:
+            # Se la tabella non esiste ancora, ritorna False
+            if "table not found" in str(e).lower() or "resource not found" in str(e).lower():
+                logger.info(f"Table 'testresets' not found, assuming no retry permission for {user_email}/{test_name}")
+                return False
+            
             logger.error(f"❌ Error querying reset flags: {e}")
             return False  # Default: non permettere retry
             
     except Exception as e:
         logger.error(f"❌ Error checking retry permission: {e}")
         return False
-
 
 def consume_test_reset_flag(user_email, test_name):
     """Consuma (disattiva) il flag quando l'utente inizia un nuovo tentativo"""
