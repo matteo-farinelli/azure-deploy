@@ -894,29 +894,14 @@ def dashboard():
 def check_if_test_allows_retry(user_email, test_name):
     """Controlla se un test consente nuovi tentativi SOLO se riabilitato dall'admin"""
     try:
-        from azure_storage import get_table_service_with_retry
+        # CORREZIONE: Importa la funzione corretta
+        from azure_storage import check_if_test_allows_retry as azure_check
+        return azure_check(user_email, test_name)
         
-        service = get_table_service_with_retry()
-        if not service:
-            return False
-        
-        # Cerca se esiste un flag di riabilitazione per questo utente/test
-        table_client = service.get_table_client('testresets')  # Nuova tabella
-        
-        try:
-            # Cerca un flag attivo per questo utente/test
-            filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
-            entities = list(table_client.query_entities(query_filter=filter_query))
-            
-            return len(entities) > 0  # True se esiste un flag attivo
-            
-        except Exception:
-            return False  # Default: non permettere retry
-            
     except Exception as e:
         logger.error(f"Error checking retry permission: {e}")
         return False
-
+        
 def count_user_test_attempts(user_email, test_name):
     """Conta il numero di tentativi per un test specifico"""
     try:
