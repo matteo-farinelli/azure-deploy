@@ -1088,38 +1088,7 @@ def admin_reset_user_test(user_email, test_name):
         }), 500
 
 
-@app.route('/admin/reset_user_test/<user_email>/<test_name>', methods=['POST'])
-@login_required
-def admin_reset_user_test(user_email, test_name):
-    """Riabilita un test permettendo un nuovo tentativo"""
-    admin_email = session.get('user_email')
-    
-    if not is_admin_user(admin_email):
-        return jsonify({'success': False, 'error': 'Accesso negato'}), 403
-    
-    try:
-        # Verifica che l'utente abbia effettivamente completato questo test
-        existing_results = get_user_test_results_all_attempts(user_email, test_name)
-        
-        if not existing_results:
-            return jsonify({'success': False, 'error': 'Test non trovato per questo utente'}), 404
-        
-        # Non eliminiamo nulla, semplicemente permettiamo un nuovo tentativo
-        # La logica di controllo "test già completato" deve essere modificata
-        
-        logger.info(f"Admin {admin_email} enabled retry for test '{test_name}' for user {user_email}")
-        
-        return jsonify({
-            'success': True, 
-            'message': f'Test "{test_name}" riabilitato per {user_email}. Potrà eseguire un nuovo tentativo.',
-            'attempts_count': len(existing_results)
-        })
-        
-    except Exception as e:
-        logger.error(f"Error resetting test {test_name} for {user_email}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-# 2. Modifica la logica di controllo "test già completato" nella dashboard
 @app.route('/dashboard')
 @login_required 
 def dashboard():
