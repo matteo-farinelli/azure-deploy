@@ -61,7 +61,7 @@ def set_test_reset_flag(user_email, test_name, admin_email):
     except Exception as e:
         logger.error(f"❌ Error creating reset flag: {e}")
         return False
-def initialize_azure_tables_mandatory():
+def :
     """Crea le tabelle OBBLIGATORIAMENTE"""
     try:
         service = get_table_service_with_retry()
@@ -176,40 +176,6 @@ def get_table_service_with_retry():
                 time.sleep(RETRY_DELAY)
             else:
                 raise Exception(f"Connessione Azure fallita dopo {MAX_RETRIES} tentativi: {str(e)}")
-
-def initialize_azure_tables_mandatory():
-    """Crea le tabelle OBBLIGATORIAMENTE"""
-    try:
-        service = get_table_service_with_retry()
-        
-        # Crea tabella users
-        try:
-            service.create_table(TABLE_NAME_USERS)
-            logger.info(f"✅ Tabella {TABLE_NAME_USERS} creata")
-        except Exception as e:
-            if "already exists" in str(e).lower() or "tableexists" in str(e).lower():
-                logger.info(f"✅ Tabella {TABLE_NAME_USERS} già esistente")
-            else:
-                logger.error(f"❌ Errore creazione tabella {TABLE_NAME_USERS}: {e}")
-                raise
-        
-        # Crea tabella results
-        try:
-            service.create_table(TABLE_NAME_RESULTS)
-            logger.info(f"✅ Tabella {TABLE_NAME_RESULTS} creata")
-        except Exception as e:
-            if "already exists" in str(e).lower() or "tableexists" in str(e).lower():
-                logger.info(f"✅ Tabella {TABLE_NAME_RESULTS} già esistente")
-            else:
-                logger.error(f"❌ Errore creazione tabella {TABLE_NAME_RESULTS}: {e}")
-                raise
-        
-        logger.info("✅ Azure Tables inizializzate")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ ERRORE CRITICO inizializzazione tabelle: {e}")
-        raise Exception(f"Inizializzazione Azure fallita: {e}")
 
 def save_user_data_azure_only(email, user_info):
     """Salva dati utente SOLO su Azure - NO fallback"""
