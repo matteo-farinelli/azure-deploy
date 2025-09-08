@@ -762,6 +762,332 @@ def register():
     return render_template('register.html',
                           azienda='auxiell',
                           company_color='#6C757D')
+@app.route('/admin/download_user_test/<user_email>/<test_name>')
+@login_required
+def admin_download_user_test(user_email, test_name):
+    """Download di un test specifico di un utente per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return "Accesso negato. Solo per amministratori.", 403
+    
+    try:
+        # Recupera TUTTI i risultati dell'utente per questo test specifico
+        all_user_results = get_user_test_results_all_attempts_azure_only(user_email)
+        
+        # Trova il test specifico (prendi l'ultimo tentativo per default)
+        test_results = [result for result in all_user_results if result.get('test_name') == test_name]
+        
+        if not test_results:
+            return f"Test '{test_name}' non trovato per l'utente {user_email}.", 404
+        
+        # Ordina per attempt_number e prendi l'ultimo
+        test_results.sort(key=lambda x: x.get('attempt_number', 1), reverse=True)
+        found_result = test_results[0]  # Ultimo tentativo
+        
+        try:
+            risposte = json.loads(found_result.get('answers_json', '[]'))
+            if not risposte:
+                return "Dati del test non disponibili.", 404
+        except Exception as e:
+            logger.error(f"Errore parsing JSON: {e}")
+            return "Errore nel recupero dei dati del test.", 500
+        
+        # Estrai nome utente dall'email
+        nome, cognome = extract_name_from_email(user_email)
+        utente_nome = f"{nome} {cognome}"
+        azienda = found_result.get('azienda', 'N/A')
+        
+        # Crea DataFrame
+        df_r = pd.DataFrame(risposte)
+        
+        # Calcola punteggio
+        chiuse = df_r[df_r["Tipo"] == "chiusa"]
+        n_tot = len(chiuse)
+        n_cor = int(chiuse["Esatta"].sum()) if n_tot else 0
+        perc = int(n_cor / n_tot * 100) if n_tot else 0
+        
+        # Data completamento
+        completed_at = found_result.get('completed_at', '')
+        if completed_at:
+            try:
+                dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                data_test = dt.strftime("%d/%m/%Y %H:%M")
+            except:
+                data_test = completed_at
+        else:
+            data_test = "N/A"
+        
+        # Crea info sheet con info sui tentativi
+        data_download = datetime.now().strftime("%d/%m/%Y %H:%M")
+        admin_name = session.get('utente', 'Admin')
+        attempt_number = found_result.get('attempt_number', 1)
+        total_attempts = len(test_results)
+        
+        info = pd.DataFrame([{
+            "Scaricato da Admin": admin_name,
+            "Data Download": data_download,
+            "Nome Utente": utente_nome,
+            "Email Utente": user_email,
+            "Data Completamento Test": data_test,
+            "Test": test_name,
+            "Tentativo": f"{attempt_number} di {total_attempts}",
+            "Azienda": azienda,
+            "Punteggio": f"{perc}%",
+            "Risposte Corrette": f"{n_cor}/{n_tot}",
+            "Totale Domande": n_tot,
+            "Stato": "Ultimo Tentativo" if found_result.get('is_latest', True) else "Tentativo Precedente"
+        }])
+        
+        # Crea file Excel
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            info.to_excel(writer, index=False, sheet_name="Info Download", startrow=0)
+            
+            # Riordina colonne per leggibilità
+            column_order = ["Tipo", "Azienda", "Utente", "Test", "Argomento", "Domanda", "Risposta", "Corretta", "Esatta"]
+            existing_columns = [col for col in column_order if col in df_r.columns]
+            other_columns = [col for col in df_r.columns if col not in column_order]
+            final_columns = existing_columns + other_columns
+            
+            df_export = df_r[final_columns]
+            df_export.to_excel(writer, index=False, sheet_name="Dettaglio Risposte", startrow=0)
+            
+            # Se ci sono più tentativi, aggiungi un sheet di confronto
+            if total_attempts > 1:
+                comparison_data = []
+                for i, result in enumerate(test_results):
+                    comparison_data.append({
+                        'Tentativo': result.get('attempt_number', i+1),
+                        'Data': result.get('completed_at', ''),
+                        'Punteggio (%)': result.get('score', 0),
+                        'Risposte Corrette': result.get('correct_answers', 0),
+                        'Totale Domande': result.get('total_questions', 0),
+                        'Stato': 'Ultimo' if result.get('is_latest', True) else 'Precedente'
+                    })
+                
+                comparison_df = pd.DataFrame(comparison_data)
+                comparison_df.to_excel(writer, index=False, sheet_name="Confronto Tentativi", startrow=0)
+        
+        buf.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', utente_nome).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        test_sicuro = re.sub(r'[^\w\s-]', '', test_name).strip()
+        test_sicuro = re.sub(r'[-\s]+', '_', test_sicuro)
+        
+        filename = f"admin_download_{nome_sicuro}_{test_sicuro}_tentativo{attempt_number}_{timestamp}.xlsx"
+        
+        logger.info(f"Admin {admin_email} downloaded test {test_name} (attempt {attempt_number}) for user {user_email}")
+        
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Admin download error: {e}")
+        return f"Errore durante il download: {e}", 500
+
+@app.route('/admin/download_all_user_tests/<user_email>')
+@login_required
+def admin_download_all_user_tests(user_email):
+    """Download di tutti i test di un utente per admin"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return "Accesso negato. Solo per amministratori.", 403
+    
+    try:
+        # Recupera tutti i risultati dell'utente
+        user_results = get_user_test_results_all_attempts_azure_only(user_email)
+        
+        if not user_results:
+            return f"Nessun test trovato per l'utente {user_email}.", 404
+        
+        # Estrai nome utente
+        nome, cognome = extract_name_from_email(user_email)
+        utente_nome = f"{nome} {cognome}"
+        
+        # Crea file Excel con tutti i test
+        buf = BytesIO()
+        
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Sheet di riepilogo generale
+            admin_name = session.get('utente', 'Admin')
+            data_download = datetime.now().strftime("%d/%m/%Y %H:%M")
+            
+            # Raggruppa per test per statistiche
+            test_groups = {}
+            for result in user_results:
+                test_name = result.get('test_name', 'Unknown')
+                if test_name not in test_groups:
+                    test_groups[test_name] = []
+                test_groups[test_name].append(result)
+            
+            # Info generale
+            info_generale = pd.DataFrame([{
+                'Scaricato da Admin': admin_name,
+                'Data Download': data_download,
+                'Nome Utente': utente_nome,
+                'Email Utente': user_email,
+                'Totale Test Completati': len(test_groups),
+                'Totale Tentativi': len(user_results),
+                'Azienda': user_results[0].get('azienda', 'N/A') if user_results else 'N/A'
+            }])
+            
+            info_generale.to_excel(writer, index=False, sheet_name="Info Download", startrow=0)
+            
+            # Sheet di riepilogo per test
+            summary_data = []
+            for test_name, attempts in test_groups.items():
+                # Ordina per attempt_number
+                attempts.sort(key=lambda x: x.get('attempt_number', 1))
+                latest_attempt = attempts[-1]  # Ultimo tentativo
+                
+                # Calcola statistiche
+                scores = [a.get('score', 0) for a in attempts]
+                avg_score = sum(scores) / len(scores) if scores else 0
+                best_score = max(scores) if scores else 0
+                
+                summary_data.append({
+                    'Test': test_name,
+                    'Tentativi Totali': len(attempts),
+                    'Primo Tentativo': attempts[0].get('completed_at', 'N/A')[:10] if attempts[0].get('completed_at') else 'N/A',
+                    'Ultimo Tentativo': latest_attempt.get('completed_at', 'N/A')[:10] if latest_attempt.get('completed_at') else 'N/A',
+                    'Punteggio Migliore (%)': best_score,
+                    'Punteggio Ultimo (%)': latest_attempt.get('score', 0),
+                    'Media Tentativi (%)': round(avg_score, 1),
+                    'Stato': 'Superato' if latest_attempt.get('score', 0) >= 60 else 'Non Superato',
+                    'Azienda': latest_attempt.get('azienda', 'N/A')
+                })
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, index=False, sheet_name="Riepilogo Test", startrow=0)
+            
+            # Sheet dettagliato di tutti i tentativi
+            detailed_data = []
+            for result in user_results:
+                completed_at = result.get('completed_at', '')
+                if completed_at:
+                    try:
+                        dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                        data_formattata = dt.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        data_formattata = completed_at
+                else:
+                    data_formattata = "N/A"
+                
+                detailed_data.append({
+                    'Test': result.get('test_name', 'N/A'),
+                    'Tentativo': result.get('attempt_number', 1),
+                    'Data Completamento': data_formattata,
+                    'Punteggio (%)': result.get('score', 0),
+                    'Risposte Corrette': result.get('correct_answers', 0),
+                    'Totale Domande': result.get('total_questions', 0),
+                    'Percentuale Successo': f"{((result.get('correct_answers', 0) / result.get('total_questions', 1)) * 100):.1f}%" if result.get('total_questions', 0) > 0 else "0%",
+                    'Stato Tentativo': 'Ultimo' if result.get('is_latest', True) else 'Precedente',
+                    'Esito': 'Superato' if result.get('score', 0) >= 60 else 'Non Superato',
+                    'Azienda': result.get('azienda', 'N/A')
+                })
+            
+            detailed_df = pd.DataFrame(detailed_data)
+            detailed_df.to_excel(writer, index=False, sheet_name="Tutti i Tentativi", startrow=0)
+            
+            # Sheet per ogni test (se non troppi) con le risposte dettagliate
+            if len(test_groups) <= 8:  # Limite per evitare file troppo grandi
+                for test_name, attempts in test_groups.items():
+                    # Prendi l'ultimo tentativo per i dettagli
+                    latest_attempt = max(attempts, key=lambda x: x.get('attempt_number', 1))
+                    
+                    try:
+                        risposte = json.loads(latest_attempt.get('answers_json', '[]'))
+                        if risposte:
+                            df_test = pd.DataFrame(risposte)
+                            
+                            # Nome sheet sicuro (max 31 caratteri per Excel)
+                            sheet_name = re.sub(r'[^\w\s-]', '', test_name)[:25]
+                            if not sheet_name:
+                                sheet_name = f'Test_{len(test_groups)}'
+                            
+                            df_test.to_excel(writer, index=False, sheet_name=sheet_name, startrow=0)
+                    except:
+                        continue
+        
+        buf.seek(0)
+        
+        # Nome file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_sicuro = re.sub(r'[^\w\s-]', '', utente_nome).strip()
+        nome_sicuro = re.sub(r'[-\s]+', '_', nome_sicuro)
+        
+        filename = f"admin_tutti_test_{nome_sicuro}_{timestamp}.xlsx"
+        
+        logger.info(f"Admin {admin_email} downloaded all tests for user {user_email}")
+        
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Admin download all tests error: {e}")
+        return f"Errore durante il download: {e}", 500
+
+@app.route('/admin/reset_user_test/<user_email>/<test_name>', methods=['POST'])
+@login_required
+def admin_reset_user_test(user_email, test_name):
+    """Riabilita un test permettendo un nuovo tentativo"""
+    admin_email = session.get('user_email')
+    
+    if not is_admin_user(admin_email):
+        return jsonify({'success': False, 'error': 'Accesso negato'}), 403
+    
+    try:
+        # Verifica che l'utente abbia effettivamente completato questo test
+        existing_results = get_user_test_results_all_attempts_azure_only(user_email)
+        test_results = [r for r in existing_results if r.get('test_name') == test_name]
+        
+        if not test_results:
+            return jsonify({
+                'success': False, 
+                'error': 'Test non trovato per questo utente'
+            }), 404
+        
+        # Informazioni sui tentativi esistenti
+        total_attempts = len(test_results)
+        latest_attempt = max(test_results, key=lambda x: x.get('attempt_number', 1))
+        latest_score = latest_attempt.get('score', 0)
+        
+        # Log dell'azione admin
+        logger.info(f"Admin {admin_email} enabled retry for test '{test_name}' for user {user_email} (current attempts: {total_attempts})")
+        
+        # Restituisci successo con informazioni dettagliate
+        return jsonify({
+            'success': True, 
+            'message': f'Test "{test_name}" riabilitato per {user_email}. L\'utente potrà eseguire il tentativo #{total_attempts + 1}.',
+            'details': {
+                'attempts_count': total_attempts,
+                'latest_score': latest_score,
+                'next_attempt': total_attempts + 1
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error resetting test {test_name} for {user_email}: {e}")
+        return jsonify({
+            'success': False, 
+            'error': f'Errore durante la riabilitazione: {str(e)}'
+        }), 500
+
+
 @app.route('/admin/reset_user_test/<user_email>/<test_name>', methods=['POST'])
 @login_required
 def admin_reset_user_test(user_email, test_name):
