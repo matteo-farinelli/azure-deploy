@@ -581,7 +581,41 @@ def login():
     return render_template('login.html',
                           azienda='auxiell',
                           company_color='#6C757D')
-
+@app.route('/debug/check-flags/<user_email>')
+@login_required
+def debug_check_flags(user_email):
+    """Debug: controlla i flag di reset per un utente"""
+    if not is_admin_user(session.get('user_email')):
+        return "Accesso negato", 403
+    
+    try:
+        from azure_storage import get_table_service_with_retry
+        
+        service = get_table_service_with_retry()
+        table_client = service.get_table_client('testresets')
+        
+        # Cerca tutti i flag per questo utente
+        filter_query = f"PartitionKey eq '{user_email}'"
+        entities = list(table_client.query_entities(query_filter=filter_query))
+        
+        flags_info = []
+        for entity in entities:
+            flags_info.append({
+                'test_name': entity.get('test_name'),
+                'is_active': entity.get('is_active'),
+                'created_at': entity.get('created_at'),
+                'used_at': entity.get('used_at'),
+                'admin_email': entity.get('admin_email')
+            })
+        
+        return jsonify({
+            'user_email': user_email,
+            'flags_count': len(flags_info),
+            'flags': flags_info
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 @app.route('/debug/test-register')
 def debug_test_register():
     """Test registrazione step by step"""
