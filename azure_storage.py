@@ -16,25 +16,6 @@ TABLE_NAME_RESULTS = 'testresults'
 # Retry configuration
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-def initialize_reset_flags_table():
-    """Crea la tabella per i flag di reset test"""
-    try:
-        service = get_table_service_with_retry()
-        
-        try:
-            service.create_table('testresets')
-            logger.info("✅ Tabella testresets creata")
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                logger.info("✅ Tabella testresets già esistente")
-            else:
-                raise
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Errore creazione tabella testresets: {e}")
-        return False
 
 def set_test_reset_flag(user_email, test_name, admin_email):
     """Imposta un flag che permette di rifare un test"""
@@ -61,7 +42,7 @@ def set_test_reset_flag(user_email, test_name, admin_email):
     except Exception as e:
         logger.error(f"❌ Error creating reset flag: {e}")
         return False
-def :
+def initialize_azure_tables_mandatory():
     """Crea le tabelle OBBLIGATORIAMENTE"""
     try:
         service = get_table_service_with_retry()
