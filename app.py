@@ -906,6 +906,10 @@ def dashboard():
         available_tests = []
         completed_test_names = [test['test_name'] for test in completed_tests]
 
+        # AGGIUNGI DEBUG LOG
+        logger.info(f"🔍 Dashboard debug for {user_email}:")
+        logger.info(f"   Completed tests: {completed_test_names}")
+
         try:
             # Path assoluto per Azure
             base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -938,6 +942,12 @@ def dashboard():
                             # Verifica se sono consentiti tentativi multipli (nuova logica)
                             can_retry = check_if_test_allows_retry(user_email, test_name)
                             
+                            # AGGIUNGI DEBUG LOG DETTAGLIATO
+                            logger.info(f"   Test: {test_name}")
+                            logger.info(f"     - is_completed: {is_completed}")
+                            logger.info(f"     - can_retry: {can_retry}")
+                            logger.info(f"     - can_attempt: {not is_completed or can_retry}")
+                            
                             available_tests.append({
                                 'name': test_name,
                                 'completed': is_completed,
@@ -947,6 +957,11 @@ def dashboard():
                             
         except Exception as e:
             logger.error(f"Error loading tests: {e}")
+
+        # AGGIUNGI DEBUG LOG FINALE
+        logger.info(f"   Final available_tests:")
+        for test in available_tests:
+            logger.info(f"     - {test['name']}: completed={test['completed']}, can_attempt={test['can_attempt']}")
 
         logo_path, logo_exists = get_logo_info(azienda)
         company_color = get_company_color(azienda)
