@@ -167,16 +167,17 @@ def get_user_test_results_all_attempts(user_email, test_name=None):
         if not service:
             return []
         
+        # CORREZIONE: Usa table_client invece di service direttamente
+        table_client = service.get_table_client(TABLE_NAME_RESULTS)
+        
         # Query per tutti i risultati dell'utente
         if test_name:
             filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}'"
         else:
             filter_query = f"PartitionKey eq '{user_email}'"
         
-        entities = service.query_entities(
-            table_name=TABLE_NAME_RESULTS,
-            query_filter=filter_query
-        )
+        # CORREZIONE: Usa table_client.query_entities invece di service.query_entities
+        entities = list(table_client.query_entities(query_filter=filter_query))
         
         results = []
         for entity in entities:
@@ -202,7 +203,7 @@ def get_user_test_results_all_attempts(user_email, test_name=None):
     except Exception as e:
         logger.error(f"Error getting all test attempts: {e}")
         return []
-
+        
 def get_user_test_results_latest_only(user_email):
     """Recupera solo gli ultimi tentativi per ogni test"""
     try:
@@ -225,12 +226,14 @@ def update_result_latest_status(user_email, test_name, created_at, is_latest):
         if not service:
             return False
         
+        # CORREZIONE: Usa table_client
+        table_client = service.get_table_client(TABLE_NAME_RESULTS)
+        
         # Trova l'entità specifica usando created_at come RowKey
         row_key = created_at.replace(':', '-').replace('.', '-')
         
         try:
-            entity = service.get_entity(
-                table_name=TABLE_NAME_RESULTS,
+            entity = table_client.get_entity(
                 partition_key=user_email,
                 row_key=row_key
             )
@@ -238,9 +241,9 @@ def update_result_latest_status(user_email, test_name, created_at, is_latest):
             # Aggiorna solo il campo is_latest
             entity['is_latest'] = is_latest
             
-            service.update_entity(
-                table_name=TABLE_NAME_RESULTS,
-                entity=entity
+            table_client.update_entity(
+                entity=entity,
+                mode='replace'
             )
             
             return True
@@ -271,7 +274,25 @@ def get_company_color(azienda):
         "xva": "#D4AF37"
     }
     return colori.get(azienda.lower() if azienda else "", "#F63366")
-
+def optimize_session_data():
+    """Ottimizza i dati della sessione per evitare cookie troppo grandi"""
+    try:
+        # Rimuovi dati pesanti dalla sessione
+        if "domande_selezionate" in session and len(str(session["domande_selezionate"])) > 2000:
+            # Salva solo gli ID delle domande invece dell'intero contenuto
+            domande = session["domande_selezionate"]
+            session["domande_count"] = len(domande) if domande else 0
+            # Non salvare il contenuto completo nella sessione
+            del session["domande_selezionate"]
+        
+        if "risposte" in session and len(str(session["risposte"])) > 1000:
+            # Rimuovi le risposte dalla sessione dopo il salvataggio
+            del session["risposte"]
+        
+        session.modified = True
+        logger.info("Session data optimized")
+    except Exception as e:
+        logger.warning(f"Session optimization failed: {e}")
 def hash_password(password):
     """Cripta la password usando SHA-256"""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -1037,7 +1058,127 @@ def get_latest_attempts_only(test_results):
             latest_results[key] = result
     
     return list(latest_results.values())
-    
+# Aggiungi questa route nel tuo app.py per testare Azure
+
+@app.route('/test-azure-connection')
+def test_azure_connection():
+    """Test completo della connessione Azure"""
+    try:
+        from azure_storage import get_table_service_with_retry, TABLE_NAME_USERS, TABLE_NAME_RESULTS
+        
+        results = {
+            "timestamp": datetime.now().isoformat(),
+            "tests": []
+        }
+        
+        # Test 1: Connessione base
+        try:
+            service = get_table_service_with_retry()
+            results["tests"].append({
+                "name": "Connection",
+                "status": "✅ SUCCESS",
+                "details": "Azure Tables service connected"
+            })
+        except Exception as e:
+            results["tests"].append({
+                "name": "Connection", 
+                "status": "❌ FAILED",
+                "error": str(e)
+            })
+            return jsonify(results), 500
+        
+        # Test 2: Lista tabelle
+        try:
+            tables = list(service.list_tables())
+            table_names = [t.name for t in tables]
+            results["tests"].append({
+                "name": "List Tables",
+                "status": "✅ SUCCESS",
+                "details": f"Found tables: {table_names}"
+            })
+        except Exception as e:
+            results["tests"].append({
+                "name": "List Tables",
+                "status": "❌ FAILED", 
+                "error": str(e)
+            })
+        
+        # Test 3: Query tabella users
+        try:
+            table_client = service.get_table_client(TABLE_NAME_USERS)
+            users = list(table_client.list_entities())
+            results["tests"].append({
+                "name": "Query Users Table",
+                "status": "✅ SUCCESS",
+                "details": f"Found {len(users)} users"
+            })
+        except Exception as e:
+            results["tests"].append({
+                "name": "Query Users Table",
+                "status": "❌ FAILED",
+                "error": str(e)
+            })
+        
+        # Test 4: Query tabella results  
+        try:
+            table_client = service.get_table_client(TABLE_NAME_RESULTS)
+            test_results = list(table_client.list_entities())
+            results["tests"].append({
+                "name": "Query Results Table", 
+                "status": "✅ SUCCESS",
+                "details": f"Found {len(test_results)} test results"
+            })
+        except Exception as e:
+            results["tests"].append({
+                "name": "Query Results Table",
+                "status": "❌ FAILED",
+                "error": str(e)
+            })
+        
+        # Test 5: Test scrittura (utente fittizio)
+        try:
+            table_client = service.get_table_client(TABLE_NAME_USERS)
+            test_entity = {
+                'PartitionKey': 'test',
+                'RowKey': f'test_{int(datetime.now().timestamp())}',
+                'email': 'test@test.com',
+                'nome': 'Test',
+                'cognome': 'User',
+                'azienda': 'test',
+                'is_admin': False,
+                'created_at': datetime.now().isoformat(),
+                'test_entity': True
+            }
+            
+            table_client.upsert_entity(test_entity)
+            results["tests"].append({
+                "name": "Write Test",
+                "status": "✅ SUCCESS", 
+                "details": "Test entity written successfully"
+            })
+            
+            # Rimuovi l'entità di test
+            table_client.delete_entity(
+                partition_key=test_entity['PartitionKey'],
+                row_key=test_entity['RowKey']
+            )
+            
+        except Exception as e:
+            results["tests"].append({
+                "name": "Write Test",
+                "status": "❌ FAILED",
+                "error": str(e)
+            })
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({
+            "status": "CRITICAL ERROR",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 500
+        
 @app.route('/admin/user/<user_email>')
 @login_required
 def admin_user_details(user_email):
@@ -1844,8 +1985,6 @@ def admin_gdpr_requests():
         logger.error(f"Admin GDPR requests error: {e}")
         return render_template('error.html', error='Errore caricamento dashboard GDPR admin')
 
-# Aggiungi anche supporto per le richieste GDPR nella dashboard principale
-# Modifica la tua dashboard route per includere un link alle richieste GDPR
 @app.route('/submit_answers', methods=['POST'])
 @login_required
 def submit_answers():
@@ -1952,7 +2091,7 @@ def submit_answers():
         else:
             n_cor = perc = 0
 
-        # Salva risultato
+        # Prepara risultato per il salvataggio
         result = {
             'user_email': user_email,
             'test_name': test_scelto,
@@ -1960,28 +2099,51 @@ def submit_answers():
             'score': perc,
             'correct_answers': n_cor,
             'total_questions': n_tot,
-            'answers_json': json.dumps(risposte, ensure_ascii=False)
+            'answers_json': json.dumps(risposte, ensure_ascii=False),
+            'completed_at': datetime.now().isoformat(),
+            'created_at': datetime.now().isoformat()
         }
 
-        save_test_result(result)
+        # Salva risultato
+        save_success = save_test_result(result)
 
-        session["submitted"] = True
-        session["risposte"] = risposte
-        session.modified = True
+        if save_success:
+            session["submitted"] = True
+            
+            # Ottimizza la sessione per evitare cookie troppo grandi
+            try:
+                # Rimuovi dati pesanti dalla sessione
+                if "domande_selezionate" in session:
+                    session["domande_count"] = len(session.get("domande_selezionate", []))
+                    del session["domande_selezionate"]
+                
+                # Non salvare le risposte nella sessione (troppo pesante)
+                session.modified = True
+                logger.info("Session data optimized")
+            except Exception as e:
+                logger.warning(f"Session optimization failed: {e}")
 
-        logger.info(f"Test completed: {perc}% ({n_cor}/{n_tot}) - {user_email}")
+            logger.info(f"Test completed: {perc}% ({n_cor}/{n_tot}) - {user_email}")
 
-        return jsonify({
-            'success': True,
-            'score': perc,
-            'correct': n_cor,
-            'total': n_tot
-        })
+            return jsonify({
+                'success': True,
+                'score': perc,
+                'correct': n_cor,
+                'total': n_tot
+            })
+        else:
+            logger.error(f"Failed to save test result for {user_email}")
+            return jsonify({
+                'success': False,
+                'error': 'Errore nel salvataggio dei risultati. Riprova.'
+            })
 
     except Exception as e:
         logger.error(f"Submit answers error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
+        return jsonify({
+            'success': False, 
+            'error': f'Errore durante il salvataggio: {str(e)}'
+        })
 @app.route('/download_results')
 @app.route('/download_results/<test_name>')
 @login_required
