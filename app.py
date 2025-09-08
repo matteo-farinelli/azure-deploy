@@ -306,13 +306,14 @@ def get_user_test_results_all_attempts_azure_only(user_email):
             logger.error("Azure Table service not available")
             return []
         
+        # CORREZIONE: Usa table_client invece di service direttamente
+        table_client = service.get_table_client(TABLE_NAME_RESULTS)
+        
         # Query per tutti i risultati dell'utente
         filter_query = f"PartitionKey eq '{user_email}'"
         
-        entities = service.query_entities(
-            table_name=TABLE_NAME_RESULTS,
-            query_filter=filter_query
-        )
+        # CORREZIONE: query_entities sul table_client, non sul service
+        entities = table_client.query_entities(query_filter=filter_query)
         
         results = []
         for entity in entities:
@@ -333,6 +334,8 @@ def get_user_test_results_all_attempts_azure_only(user_email):
         
         # Ordina per data di creazione (più recenti prima)
         results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        logger.info(f"Retrieved {len(results)} test results for user {user_email}")
         return results
         
     except Exception as e:
