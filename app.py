@@ -763,8 +763,7 @@ def register():
                           azienda='auxiell',
                           company_color='#6C757D')
 
-@app.route('/admin/download_all_user_tests/<user_email>')
-@login_required
+
 @app.route('/admin/reset_user_test/<user_email>/<test_name>', methods=['POST'])
 @login_required
 def admin_reset_user_test(user_email, test_name):
