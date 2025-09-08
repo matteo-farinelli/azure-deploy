@@ -581,6 +581,44 @@ def login():
     return render_template('login.html',
                           azienda='auxiell',
                           company_color='#6C757D')
+
+@app.route('/debug/test-retry-check/<user_email>/<test_name>')
+@login_required
+def debug_test_retry_check(user_email, test_name):
+    """Debug: testa la funzione check_if_test_allows_retry"""
+    if not is_admin_user(session.get('user_email')):
+        return "Accesso negato", 403
+    
+    try:
+        from azure_storage import get_table_service_with_retry
+        
+        service = get_table_service_with_retry()
+        table_client = service.get_table_client('testresets')
+        
+        # Test la query esatta che usa la funzione
+        filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
+        entities = list(table_client.query_entities(query_filter=filter_query))
+        
+        # Mostra anche tutti i test_name disponibili
+        all_flags_query = f"PartitionKey eq '{user_email}'"
+        all_entities = list(table_client.query_entities(query_filter=all_flags_query))
+        
+        available_tests = [e.get('test_name') for e in all_entities]
+        
+        return jsonify({
+            'user_email': user_email,
+            'test_name_searched': test_name,
+            'query_used': filter_query,
+            'matching_entities': len(entities),
+            'entities_found': [{'test_name': e.get('test_name'), 'is_active': e.get('is_active')} for e in entities],
+            'all_available_test_names': available_tests,
+            'can_retry_result': len(entities) > 0
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/debug/check-flags/<user_email>')
 @login_required
 def debug_check_flags(user_email):
