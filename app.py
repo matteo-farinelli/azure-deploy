@@ -784,15 +784,25 @@ def admin_reset_user_test(user_email, test_name):
                 'error': 'Test non trovato per questo utente'
             }), 404
         
+        # NUOVO: Crea il flag di reset
+        from azure_storage import set_test_reset_flag
+        
+        flag_created = set_test_reset_flag(user_email, test_name, admin_email)
+        
+        if not flag_created:
+            return jsonify({
+                'success': False,
+                'error': 'Errore nella creazione del flag di reset'
+            }), 500
+        
         # Informazioni sui tentativi esistenti
         total_attempts = len(test_results)
         latest_attempt = max(test_results, key=lambda x: x.get('attempt_number', 1))
         latest_score = latest_attempt.get('score', 0)
         
         # Log dell'azione admin
-        logger.info(f"Admin {admin_email} enabled retry for test '{test_name}' for user {user_email} (current attempts: {total_attempts})")
+        logger.info(f"Admin {admin_email} enabled retry for test '{test_name}' for user {user_email}")
         
-        # Restituisci successo con informazioni dettagliate
         return jsonify({
             'success': True, 
             'message': f'Test "{test_name}" riabilitato per {user_email}. L\'utente potrà eseguire il tentativo #{total_attempts + 1}.',
@@ -809,7 +819,6 @@ def admin_reset_user_test(user_email, test_name):
             'success': False, 
             'error': f'Errore durante la riabilitazione: {str(e)}'
         }), 500
-
 
 
 @app.route('/dashboard')
@@ -883,14 +892,30 @@ def dashboard():
         return render_template('error.html', error=f'Errore dashboard: {e}')
 
 def check_if_test_allows_retry(user_email, test_name):
-    """Controlla se un test consente nuovi tentativi (logica business)"""
-    # Implementa qui la tua logica di business
-    # Per ora, consenti sempre retry se l'admin non ha impostato limitazioni
-    
-    # Puoi aggiungere un campo nella tabella "tests_settings" per controllare questo
-    # O basarti su regole specifiche per tipo di test
-    
-    return True  # Per ora consenti sempre
+    """Controlla se un test consente nuovi tentativi SOLO se riabilitato dall'admin"""
+    try:
+        from azure_storage import get_table_service_with_retry
+        
+        service = get_table_service_with_retry()
+        if not service:
+            return False
+        
+        # Cerca se esiste un flag di riabilitazione per questo utente/test
+        table_client = service.get_table_client('testresets')  # Nuova tabella
+        
+        try:
+            # Cerca un flag attivo per questo utente/test
+            filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
+            entities = list(table_client.query_entities(query_filter=filter_query))
+            
+            return len(entities) > 0  # True se esiste un flag attivo
+            
+        except Exception:
+            return False  # Default: non permettere retry
+            
+    except Exception as e:
+        logger.error(f"Error checking retry permission: {e}")
+        return False
 
 def count_user_test_attempts(user_email, test_name):
     """Conta il numero di tentativi per un test specifico"""
@@ -907,18 +932,22 @@ def count_user_test_attempts(user_email, test_name):
 def start_test(test_name):
     user_email = session.get('user_email')
 
-    # NUOVA LOGICA: Verifica se può tentare (invece di bloccare se completato)
+    # Verifica se può tentare
     latest_results = get_user_test_results_latest_only(user_email)
     completed_test_names = [test['test_name'] for test in latest_results]
     
     if test_name in completed_test_names:
-        # Controlla se può ritentare
+        # Controlla se può ritentare (solo se admin ha riabilitato)
         can_retry = check_if_test_allows_retry(user_email, test_name)
         if not can_retry:
             attempts_count = count_user_test_attempts(user_email, test_name)
             return render_template('error.html', 
-                                 error=f'Hai già completato il test "{test_name}" ({attempts_count} tentativi). Non sono consentiti ulteriori tentativi.',
+                                 error=f'Hai già completato il test "{test_name}" ({attempts_count} tentativi). Contatta l\'amministratore per riabilitarlo.',
                                  show_dashboard_button=True)
+        else:
+            # CONSUMA il flag quando l'utente inizia il test
+            from azure_storage import consume_test_reset_flag
+            consume_test_reset_flag(user_email, test_name)
 
     # Se può procedere, continua normalmente
     session["test_scelto"] = test_name
@@ -953,7 +982,7 @@ def start_test(test_name):
     except Exception as e:
         logger.error(f"Error starting test: {e}")
         return render_template('error.html', error=f'Errore caricamento test: {e}')
-
+        
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
