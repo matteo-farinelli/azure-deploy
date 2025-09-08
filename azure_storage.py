@@ -16,7 +16,145 @@ TABLE_NAME_RESULTS = 'testresults'
 # Retry configuration
 MAX_RETRIES = 3
 RETRY_DELAY = 2
+def initialize_reset_flags_table():
+    """Crea la tabella per i flag di reset test"""
+    try:
+        service = get_table_service_with_retry()
+        
+        try:
+            service.create_table('testresets')
+            logger.info("✅ Tabella testresets creata")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("✅ Tabella testresets già esistente")
+            else:
+                raise
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Errore creazione tabella testresets: {e}")
+        return False
 
+def set_test_reset_flag(user_email, test_name, admin_email):
+    """Imposta un flag che permette di rifare un test"""
+    try:
+        service = get_table_service_with_retry()
+        table_client = service.get_table_client('testresets')
+        
+        # Crea un nuovo flag
+        entity = {
+            'PartitionKey': user_email,
+            'RowKey': f"{test_name}_{int(datetime.now().timestamp())}",
+            'test_name': test_name,
+            'user_email': user_email,
+            'admin_email': admin_email,
+            'is_active': True,
+            'created_at': datetime.now().isoformat(),
+            'used_at': None
+        }
+        
+        table_client.upsert_entity(entity)
+        logger.info(f"✅ Reset flag created: {user_email} - {test_name} by {admin_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error creating reset flag: {e}")
+        return False
+def initialize_azure_tables_mandatory():
+    """Crea le tabelle OBBLIGATORIAMENTE"""
+    try:
+        service = get_table_service_with_retry()
+        
+        # Crea tabella users
+        try:
+            service.create_table(TABLE_NAME_USERS)
+            logger.info(f"✅ Tabella {TABLE_NAME_USERS} creata")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "tableexists" in str(e).lower():
+                logger.info(f"✅ Tabella {TABLE_NAME_USERS} già esistente")
+            else:
+                logger.error(f"❌ Errore creazione tabella {TABLE_NAME_USERS}: {e}")
+                raise
+        
+        # Crea tabella results
+        try:
+            service.create_table(TABLE_NAME_RESULTS)
+            logger.info(f"✅ Tabella {TABLE_NAME_RESULTS} creata")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "tableexists" in str(e).lower():
+                logger.info(f"✅ Tabella {TABLE_NAME_RESULTS} già esistente")
+            else:
+                logger.error(f"❌ Errore creazione tabella {TABLE_NAME_RESULTS}: {e}")
+                raise
+        
+        # AGGIUNGI: Crea tabella testresets
+        try:
+            service.create_table('testresets')
+            logger.info("✅ Tabella testresets creata")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "tableexists" in str(e).lower():
+                logger.info("✅ Tabella testresets già esistente")
+            else:
+                logger.error(f"❌ Errore creazione tabella testresets: {e}")
+                raise
+        
+        logger.info("✅ Azure Tables inizializzate")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ ERRORE CRITICO inizializzazione tabelle: {e}")
+        raise Exception(f"Inizializzazione Azure fallita: {e}")
+
+def check_if_test_allows_retry(user_email, test_name):
+    """Controlla se un test consente nuovi tentativi SOLO se riabilitato dall'admin"""
+    try:
+        service = get_table_service_with_retry()
+        if not service:
+            return False
+        
+        # Cerca se esiste un flag di riabilitazione per questo utente/test
+        table_client = service.get_table_client('testresets')
+        
+        try:
+            # Cerca un flag attivo per questo utente/test
+            filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
+            entities = list(table_client.query_entities(query_filter=filter_query))
+            
+            has_active_flag = len(entities) > 0
+            logger.info(f"✅ Retry check for {user_email}/{test_name}: {has_active_flag}")
+            return has_active_flag
+            
+        except Exception as e:
+            logger.error(f"❌ Error querying reset flags: {e}")
+            return False  # Default: non permettere retry
+            
+    except Exception as e:
+        logger.error(f"❌ Error checking retry permission: {e}")
+        return False
+
+
+def consume_test_reset_flag(user_email, test_name):
+    """Consuma (disattiva) il flag quando l'utente inizia un nuovo tentativo"""
+    try:
+        service = get_table_service_with_retry()
+        table_client = service.get_table_client('testresets')
+        
+        # Trova e disattiva tutti i flag attivi per questo utente/test
+        filter_query = f"PartitionKey eq '{user_email}' and test_name eq '{test_name}' and is_active eq true"
+        entities = list(table_client.query_entities(query_filter=filter_query))
+        
+        for entity in entities:
+            entity['is_active'] = False
+            entity['used_at'] = datetime.now().isoformat()
+            table_client.update_entity(entity, mode='replace')
+        
+        logger.info(f"✅ Reset flags consumed: {user_email} - {test_name}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error consuming reset flags: {e}")
+        return False
 def get_table_service_with_retry():
     """Ottiene il client Azure Table con retry e validazione"""
     if not AZURE_STORAGE_CONNECTION_STRING:
