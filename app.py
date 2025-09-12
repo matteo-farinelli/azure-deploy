@@ -1800,11 +1800,30 @@ def show_quiz():
             if session["tutte_domande"]:
                 domande_selezionate = df_filtrato.reset_index(drop=True)
             else:
-                domande_selezionate = (
-                    df_filtrato.groupby("principio", group_keys=False)
-                               .apply(lambda x: x.sample(n=min(2, len(x)), random_state=42))
-                               .reset_index(drop=True)
-                )
+                target_questions = 30  # Numero desiderato di domande
+                principi = df_filtrato["principio"].unique()
+                num_principi = len(principi)
+                
+                if num_principi > 0:
+                    # Calcola quante domande per principio
+                    domande_per_principio = max(1, target_questions // num_principi)
+                    
+                    domande_selezionate = (
+                        df_filtrato.groupby("principio", group_keys=False)
+                                   .apply(lambda x: x.sample(n=min(domande_per_principio, len(x)), random_state=42))
+                                   .reset_index(drop=True)
+                    )
+                    
+                    # Se non abbiamo abbastanza domande, aggiungi altre random
+                    if len(domande_selezionate) < target_questions:
+                        remaining = target_questions - len(domande_selezionate)
+                        unused = df_filtrato[~df_filtrato.index.isin(domande_selezionate.index)]
+                        if len(unused) > 0:
+                            extra = unused.sample(n=min(remaining, len(unused)), random_state=42)
+                            domande_selezionate = pd.concat([domande_selezionate, extra]).reset_index(drop=True)
+                else:
+                    domande_selezionate = df_filtrato.reset_index(drop=True)
+            
             session["domande_selezionate"] = domande_selezionate.to_dict('records')
 
         domande = session["domande_selezionate"]
