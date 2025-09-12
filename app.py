@@ -19,6 +19,96 @@ import hashlib
 from azure.data.tables import TableServiceClient, TableEntity
 from azure.core.exceptions import ResourceNotFoundError
 from azure_storage import *
+import time
+import hashlib
+from typing import Dict, Any, Optional
+
+class AppCache:
+    """Sistema di caching ottimizzato per l'app Assessment"""
+    
+    def __init__(self, default_ttl: int = 30):
+        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.default_ttl = default_ttl
+        self.stats = {
+            'hits': 0,
+            'misses': 0,
+            'saves': 0,
+            'queries_avoided': 0
+        }
+    
+    def _generate_key(self, user_email: str, operation: str, extra: str = "") -> str:
+        """Genera chiave cache univoca"""
+        key_data = f"{user_email}_{operation}_{extra}"
+        return hashlib.md5(key_data.encode()).hexdigest()[:16]
+    
+    def get(self, user_email: str, operation: str, extra: str = "") -> Optional[Any]:
+        """Recupera dati dal cache"""
+        key = self._generate_key(user_email, operation, extra)
+        
+        if key in self.cache:
+            entry = self.cache[key]
+            if time.time() < entry['expires_at']:
+                self.stats['hits'] += 1
+                self.stats['queries_avoided'] += 1
+                logger.info(f"📋 Cache HIT: {operation} for {user_email}")
+                return entry['data']
+            else:
+                del self.cache[key]
+        
+        self.stats['misses'] += 1
+        logger.info(f"❌ Cache MISS: {operation} for {user_email}")
+        return None
+    
+    def set(self, user_email: str, operation: str, data: Any, extra: str = "", ttl: int = None) -> None:
+        """Salva dati nel cache"""
+        key = self._generate_key(user_email, operation, extra)
+        expires_at = time.time() + (ttl or self.default_ttl)
+        
+        self.cache[key] = {
+            'data': data,
+            'expires_at': expires_at,
+            'created_at': time.time()
+        }
+        
+        self.stats['saves'] += 1
+        logger.info(f"💾 Cache SET: {operation} for {user_email} (TTL: {ttl or self.default_ttl}s)")
+    
+    def invalidate(self, user_email: str, operation: str = None, extra: str = "") -> None:
+        """Invalida cache per utente/operazione"""
+        if operation:
+            key = self._generate_key(user_email, operation, extra)
+            if key in self.cache:
+                del self.cache[key]
+                logger.info(f"🗑️ Cache INVALIDATED: {operation} for {user_email}")
+        else:
+            # Invalida tutto per l'utente
+            keys_to_delete = []
+            for key, entry in self.cache.items():
+                if user_email in str(entry.get('data', '')):  # Semplice check
+                    keys_to_delete.append(key)
+            
+            for key in keys_to_delete:
+                del self.cache[key]
+            
+            logger.info(f"🗑️ Cache CLEARED for user: {user_email}")
+    
+    def get_stats(self) -> dict:
+        """Statistiche cache"""
+        total_requests = self.stats['hits'] + self.stats['misses']
+        hit_rate = (self.stats['hits'] / max(1, total_requests)) * 100
+        
+        return {
+            'cache_hits': self.stats['hits'],
+            'cache_misses': self.stats['misses'],
+            'total_requests': total_requests,
+            'hit_rate_percent': round(hit_rate, 1),
+            'queries_avoided': self.stats['queries_avoided'],
+            'cache_entries': len(self.cache),
+            'memory_usage_kb': round(len(str(self.cache)) / 1024, 2)
+        }
+
+# Istanza globale del cache
+app_cache = AppCache(default_ttl=30)
 
 # Configurazione logging per Azure 
 logging.basicConfig(
@@ -71,7 +161,129 @@ def is_admin_user(email):
         'admin@xva-services.com'
     ]
     return email.lower() in [e.lower() for e in admin_emails]
+# ==== FUNZIONI WRAPPER CACHED ====
 
+def get_user_test_results_cached(user_email):
+    """Versione cached di get_user_test_results_latest_only"""
+    
+    # Controlla cache
+    cached_results = app_cache.get(user_email, "test_results_latest")
+    if cached_results is not None:
+        return cached_results
+    
+    # Esegui query reale
+    logger.info(f"🔍 QUERY REALE: test results per {user_email}")
+    results = get_user_test_results_latest_only(user_email)
+    
+    # Salva nel cache (30 secondi)
+    app_cache.set(user_email, "test_results_latest", results, ttl=30)
+    
+    return results
+
+def get_user_test_results_all_attempts_cached(user_email):
+    """Versione cached di get_user_test_results_all_attempts_azure_only"""
+    
+    cached_results = app_cache.get(user_email, "test_results_all")
+    if cached_results is not None:
+        return cached_results
+    
+    logger.info(f"🔍 QUERY REALE: tutti i tentativi per {user_email}")
+    results = get_user_test_results_all_attempts_azure_only(user_email)
+    
+    # Cache per 45 secondi (dati meno frequenti)
+    app_cache.set(user_email, "test_results_all", results, ttl=45)
+    
+    return results
+
+def check_if_test_allows_retry_cached(user_email, test_name):
+    """Versione cached di check_if_test_allows_retry"""
+    
+    cached_result = app_cache.get(user_email, "retry_check", test_name)
+    if cached_result is not None:
+        return cached_result
+    
+    logger.info(f"🔍 QUERY REALE: retry check per {user_email}/{test_name}")
+    
+    try:
+        from azure_storage import check_if_test_allows_retry as azure_check
+        result = azure_check(user_email, test_name)
+    except Exception as e:
+        logger.error(f"Error checking retry permission: {e}")
+        result = False
+    
+    # Cache per meno tempo (15 secondi) - può cambiare rapidamente
+    app_cache.set(user_email, "retry_check", result, test_name, ttl=15)
+    
+    return result
+
+def get_dashboard_data_cached(user_email, azienda_scelta):
+    """Dashboard completa con caching ottimizzato"""
+    
+    # Controlla cache dashboard completa
+    cached_dashboard = app_cache.get(user_email, "dashboard_complete", azienda_scelta)
+    if cached_dashboard is not None:
+        return cached_dashboard
+    
+    logger.info(f"🔍 BUILDING DASHBOARD: {user_email} ({azienda_scelta})")
+    
+    # Recupera dati (usando versioni cached)
+    completed_tests = get_user_test_results_cached(user_email)
+    completed_test_names = [test['test_name'] for test in completed_tests]
+    
+    available_tests = []
+    
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        tipologie_file = os.path.join(base_dir, "repository_test", "Tipologia Test.xlsx")
+
+        if os.path.exists(tipologie_file):
+            df_tipologie = pd.read_excel(tipologie_file)
+
+            if "Nome test" in df_tipologie.columns:
+                def azienda_match(azienda_cell, azienda_utente):
+                    if pd.isna(azienda_cell) or not azienda_cell:
+                        return False
+                    aziende_test = [a.strip().lower() for a in str(azienda_cell).split(";")]
+                    return azienda_utente.lower() in aziende_test
+
+                for _, row in df_tipologie.iterrows():
+                    test_name = row["Nome test"]
+
+                    test_available = True
+                    if "Azienda" in df_tipologie.columns and pd.notna(row["Azienda"]):
+                        test_available = azienda_match(row["Azienda"], azienda_scelta)
+
+                    if test_available:
+                        is_completed = test_name in completed_test_names
+                        
+                        # USA LA VERSIONE CACHED
+                        can_retry = check_if_test_allows_retry_cached(user_email, test_name)
+                        
+                        available_tests.append({
+                            'name': test_name,
+                            'completed': is_completed,
+                            'can_attempt': not is_completed or can_retry,
+                            'attempts_count': count_user_test_attempts(user_email, test_name)
+                        })
+                        
+    except Exception as e:
+        logger.error(f"Error loading tests: {e}")
+    
+    # Prepara risultato dashboard
+    dashboard_data = {
+        'completed_tests': completed_tests,
+        'available_tests': available_tests,
+        'cache_info': {
+            'generated_at': datetime.now().isoformat(),
+            'user_email': user_email,
+            'azienda': azienda_scelta
+        }
+    }
+    
+    # Cache dashboard per 60 secondi
+    app_cache.set(user_email, "dashboard_complete", dashboard_data, azienda_scelta, ttl=60)
+    
+    return dashboard_data
 # Funzioni helper
 def get_user_data(email):
     """Recupera dati utente SOLO da Azure Table Storage"""
@@ -996,8 +1208,6 @@ def count_user_test_attempts(user_email, test_name):
         return len(attempts)
     except:
         return 0
-
-# 3. Modifica la funzione start_test per gestire tentativi multipli
 
 @app.route('/start_test/<test_name>')
 @login_required
