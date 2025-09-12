@@ -55,6 +55,12 @@ Include diverse viste:
 - **Timeline**: andamento temporale dei completamenti
 - **Performance**: distribuzione punteggi e ranking
 - **Dettaglio Utente**: progresso individuale
+  
+### Sistema di tentativi multipli
+- Gli amministratori possono riabilitare test già completati
+- Tracking completo di tutti i tentativi con numerazione progressiva
+- Visualizzazione separata per ultimi tentativi e storico completo
+- Flag di reset gestiti in tabella dedicata testresets
 
 ### Reporting e Export
 Export risultati individuali in formato Excel, report amministrativo completo, statistiche in tempo reale e grafici interattivi con Chart.js.
@@ -70,26 +76,31 @@ azure-deploy/
 │   └── main_assessment.yml          # GitHub Actions workflow
 ├── static/images/                   # Loghi aziendali
 │   ├── auxiell_group_logobase.png
-│   ├── auxilia_logobase.png
+│   ├── auxiell_logobase.png
+│   ├── euxilia_logobase.png
 │   └── xva_logobase.png
 ├── templates/                       # Template HTML Jinja2
 │   ├── base.html                   # Layout base
 │   ├── admin_dashboard.html        # Dashboard amministrativa
+│   ├── admin_user_details.html     # Dettagli utente con tentativi
+│   ├── admin_users_list.html       # Lista tutti gli utenti
 │   ├── dashboard.html              # Dashboard utente
 │   ├── quiz.html                   # Interfaccia test
 │   ├── login.html                  # Pagina login
 │   ├── register.html               # Registrazione utenti
+│   ├── privacy_policy.html         # Informativa privacy
+│   ├── gdpr_requests.html          # Gestione richieste GDPR
+│   ├── delete_account.html         # Cancellazione account
 │   ├── error.html                  # Pagine errore
 │   └── forgot_password.html        # Recupero password
-├── repository_test/                # File test Excel
+├── repository_test/                 # File test Excel
 │   ├── Tipologia Test.xlsx         # Configurazione test
-│   └── [altri file test].xlsx     # Test specifici
+│   └── [altri file test].xlsx      # Test specifici
 ├── app.py                          # Applicazione Flask principale
-├── azure_storage.py               # Gestione Azure Table Storage
+├── azure_storage.py                # Gestione Azure Table Storage
 ├── requirements.txt                # Dipendenze Python
 └── README.md                       # Documentazione
 ```
-
 ## Setup e Installazione
 
 ### Prerequisiti
@@ -232,6 +243,19 @@ curl https://your-app.azurewebsites.net/health
 | `answers_json` | String | Dettaglio risposte (JSON) |
 | `completed_at` | DateTime | Data completamento |
 
+### Tabella `testresats`
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `PartitionKey` | String | Email utente |
+| `RowKey` | String | test_name_timestamp |
+| `test_name` | String | Nome del test |
+| `admin_email` | String | Admin che ha riabilitato |
+| `is active` | Boolean | Flag attivo/consumato |
+| `created_at` | DateTime | Data creazione flag |
+| `used_at` | DateTime | Data utilizzo flag |
+
+
 ## API Endpoints
 
 ### Pubblici
@@ -242,24 +266,38 @@ curl https://your-app.azurewebsites.net/health
 - `POST /register` - Creazione nuovo utente
 - `GET /health` - Health check dell'applicazione
 - `GET /status` - Status semplice
-
+- `GET /privacy-policy` - Informativa privacy
 ### Autenticati (Login Required)
 - `GET /dashboard` - Dashboard principale dell'utente
 - `GET /start_test/<test_name>` - Avvio di un test specifico
 - `GET /quiz` - Interfaccia per svolgere il test
 - `POST /submit_answers` - Invio delle risposte
 - `GET /download_results[/<test_name>]` - Download dei risultati
+- `GET /download_latest` - Download ultimo test completato
+- `GET /data-export` - Export dati personali GDPR
+- `GET /gdpr-requests` - Gestione richieste GDPR
+- `GET /delete-account` - Informazioni cancellazione account
 - `GET /logout` - Logout dall'applicazione
 
 ### Amministratori
 - `GET /admin/dashboard` - Dashboard amministrativa
+- `GET /admin/users` - Lista completa utenti
+- `GET /admin/user/<email>` - Dettagli utente con tutti i tentativi
+- `POST /admin/reset_user_test/<email>/<test>` - Riabilita test per nuovo tentativo
 - `GET /admin/download_report` - Report completo di tutti i test
+- `GET /admin/download_user_test/<email>/<test>` - Download test specifico utente
+- `GET /admin/download_all_user_tests/<email>` - Download tutti i test di un utente
 - `GET /admin/azure-status` - Status dettagliato di Azure
+- `GET /admin/gdpr-requests` - Dashboard richieste GDPR
 
 ### Debug & Monitoring
 - `GET /debug/info` - Informazioni sull'ambiente
+- `GET /debug/check-flags/<email>` - Verifica flag di reset per utente
+- `GET /debug/test-retry-check/<email>/<test>` - Test logica retry
+- `GET /test-azure-connection` - Test completo connessione Azure
 - `GET /debug/test-register` - Test del processo di registrazione
 - `GET /minimal` - Pagina di test minimale
+- `GET /hash-generator` - Generatore hash password per admin
 
 ## Configurazione Test Excel
 
@@ -291,7 +329,7 @@ Struttura per le domande:
 ### Account Amministratore
 
 Gli amministratori hanno accesso completo al sistema:
-- **Email**: `admin@auxiell.com`, `admin@euxilia.com`, `admin@xva-services.com`
+- **Email**: `admin@auxiell.com`
 - **Password**: Configurabile tramite variabili d'ambiente
 
 ### Account Utenti
@@ -299,6 +337,28 @@ Gli amministratori hanno accesso completo al sistema:
 - **Registrazione**: Automatica con email aziendale valida
 - **Pattern Email**: `nome.cognome@{auxiell|euxilia|xva-services}.com`
 - **Password**: Minimo 6 caratteri, hash SHA-256 per la sicurezza
+
+## Sistema di tentativi multipli
+
+### Workflow
+1. Utente completa un test (attempt_number = 1)
+2. Admin può riabilitare il test dalla dashboard
+3. Sistema crea flag in tabella `testresets`
+4. Utente vede pulsante "Nuovo Tentativo" nella dashboard
+5. Al click, il flag viene consumato (is_active = false)
+6. Nuovo risultato salvato con attempt_number incrementato
+
+### Gestione Flag Reset
+```pyton
+# Creazione flag da admin
+set_test_reset_flag(user_email, test_name, admin_email)
+
+# Verifica se retry è permesso
+check_if_test_allows_retry(user_email, test_name)
+
+# Consumo flag quando utente inizia
+consume_test_reset_flag(user_email, test_name)
+```
 
 ## Troubleshooting
 
@@ -315,6 +375,11 @@ az webapp log tail --name your-app --resource-group your-rg
 
 #### Test Non Caricati
 Verifica la presenza dei file nella cartella `repository_test/`, controlla che la struttura Excel rispetti il formato richiesto e assicurati che la mappatura in `Tipologia Test.xlsx` sia corretta.
+
+#### Test Non Riabilitabili
+- Verifica che l'utente abbia già completato il test
+- Controlla che l'admin abbia effettuato il reset
+- Verifica esistenza flag in tabella `testresets`
 
 #### Errori di Deployment
 ```bash
@@ -335,6 +400,9 @@ curl https://your-app.azurewebsites.net/admin/azure-status
 
 # Informazioni sull'applicazione
 curl https://your-app.azurewebsites.net/debug/info
+
+# Test connessione Azure completo
+curl https://your-app.azurewebsites.net/test-azure-connection
 ```
 
 ## Monitoraggio e Performance
@@ -362,7 +430,7 @@ Include gestione graceful dei fallimenti con pagine errore personalizzate, logic
 
 ### Misure Implementate
 
-Il sistema utilizza hashing delle password con SHA-256, sicurezza delle sessioni con cookie HTTPOnly, Secure e SameSite, validazione e sanitizzazione dell'input utente, enforcement HTTPS con redirect automatico in produzione, limiti di dimensione file (16MB massimo) e validazione email con pattern matching del dominio aziendale.
+Il sistema utilizza hashing delle password con SHA-256, sicurezza delle sessioni con cookie HTTPOnly, Secure e SameSite, validazione e sanitizzazione dell'input utente, enforcement HTTPS con redirect automatico in produzione, limiti di dimensione file (16MB massimo), validazione email con pattern matching del dominio aziendale e compliance GDPR con export e cancellazione dati.
 
 ### Best Practices
 
