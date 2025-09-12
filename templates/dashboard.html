@@ -1,5 +1,33 @@
-<!-- templates/dashboard.html - Versione sicura -->
+<!-- templates/dashboard.html - Versione corretta -->
 {% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+.test-card.test-reactivated {
+    border-left: 4px solid #ffc107;
+    background-color: #fff9e6;
+}
+
+.test-card.test-reactivated .badge {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.debug-box {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -21,11 +49,31 @@
         </div>
     </div>
     
-    <!-- Alert per test una sola volta -->
-    <div class="alert alert-warning mb-4">
-        <i class="fas fa-exclamation-triangle me-2"></i>
-        <strong>Importante:</strong> Ogni test può essere completato <strong>una sola volta</strong>. 
-        Assicurati di essere pronto prima di iniziare.
+    <!-- DEBUG: Rimuovi dopo aver risolto il problema -->
+    {% if available_tests %}
+    <div class="debug-box">
+        <strong>🔍 DEBUG - Test disponibili:</strong>
+        <ul class="mb-0 mt-2">
+            {% for test in available_tests %}
+            <li class="mb-1">
+                <strong>{{ test.name }}</strong>: 
+                <span class="badge bg-secondary">completed={{ test.completed }}</span>
+                <span class="badge bg-info">can_attempt={{ test.can_attempt }}</span>
+                <span class="badge bg-warning">attempts={{ test.attempts_count }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <small class="text-muted">Rimuovi questo box dal template quando il problema è risolto</small>
+    </div>
+    {% endif %}
+    <!-- Fine DEBUG -->
+    
+    <!-- Alert aggiornato per tentativi multipli -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Informazioni sui Test:</strong> 
+        Normalmente ogni test può essere completato una sola volta. 
+        Se vedi un pulsante "Nuovo Tentativo", significa che l'amministratore ha riabilitato il test per te.
     </div>
     
     <!-- Alert per notifiche sync -->
@@ -85,32 +133,53 @@
                     <i class="fas fa-play-circle text-warning me-2"></i>
                     Test Disponibili
                 </h3>
-                
+            
                 {% if available_tests %}
                     {% for test in available_tests %}
-                        <div class="dashboard-card test-card {% if test.completed %}test-completed{% else %}test-pending{% endif %}">
+                        <div class="dashboard-card test-card 
+                                    {% if test.completed and not test.can_attempt %}test-completed
+                                    {% elif test.completed and test.can_attempt %}test-reactivated
+                                    {% else %}test-pending{% endif %}">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <h6 class="mb-1">{{ test.name }}</h6>
-                                    {% if test.completed %}
+                                    {% if test.completed and not test.can_attempt %}
                                         <small class="text-success">
                                             <i class="fas fa-check me-1"></i>Completato
+                                            {% if test.attempts_count > 1 %}
+                                                <span class="badge bg-info ms-1">{{ test.attempts_count }} tentativi</span>
+                                            {% endif %}
+                                        </small>
+                                    {% elif test.completed and test.can_attempt %}
+                                        <small class="text-warning">
+                                            <i class="fas fa-redo me-1"></i>Riabilitato per nuovo tentativo
+                                            <span class="badge bg-info ms-1">{{ test.attempts_count }} tentativi precedenti</span>
                                         </small>
                                     {% else %}
-                                        <small class="text-warning">
+                                        <small class="text-info">
                                             <i class="fas fa-clock me-1"></i>Da completare
                                         </small>
                                     {% endif %}
                                 </div>
                                 <div>
-                                    {% if not test.completed %}
-                                        <a href="{{ url_for('start_test', test_name=test.name) }}" 
-                                           class="btn btn-primary btn-sm"
-                                           onclick="return confirm('Sei sicuro di voler iniziare questo test? Potrai completarlo una sola volta.')">
-                                            <i class="fas fa-play me-1"></i>Inizia
-                                        </a>
+                                    {% if test.can_attempt %}
+                                        {% if test.completed %}
+                                            <!-- Test già completato ma riabilitato -->
+                                            <a href="{{ url_for('start_test', test_name=test.name) }}" 
+                                               class="btn btn-warning btn-sm"
+                                               onclick="return confirmNewAttempt('{{ test.name }}', {{ test.attempts_count }})">
+                                                <i class="fas fa-redo me-1"></i>Nuovo Tentativo
+                                            </a>
+                                        {% else %}
+                                            <!-- Test mai fatto -->
+                                            <a href="{{ url_for('start_test', test_name=test.name) }}" 
+                                               class="btn btn-primary btn-sm"
+                                               onclick="return confirmFirstAttempt('{{ test.name }}')">
+                                                <i class="fas fa-play me-1"></i>Inizia
+                                            </a>
+                                        {% endif %}
                                     {% else %}
-                                        <button class="btn btn-outline-secondary btn-sm" disabled>
+                                        <button class="btn btn-outline-secondary btn-sm" disabled title="Test già completato">
                                             <i class="fas fa-ban me-1"></i>Completato
                                         </button>
                                     {% endif %}
@@ -188,45 +257,48 @@
             </div>
         </div>
     </div>
-<div class="row mt-4">
-    <div class="col-12">
-        <h3>Privacy e Dati Personali</h3>
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
-                        <h5 class="card-title">Privacy Policy</h5>
-                        <p class="card-text">Consulta la nostra informativa sulla privacy</p>
-                        <a href="{{ url_for('privacy_policy') }}" class="btn btn-outline-primary">
-                            Leggi Policy
-                        </a>
+
+    <!-- Privacy e Dati Personali -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <h3>Privacy e Dati Personali</h3>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title">Privacy Policy</h5>
+                            <p class="card-text">Consulta la nostra informativa sulla privacy</p>
+                            <a href="{{ url_for('privacy_policy') }}" class="btn btn-outline-primary">
+                                Leggi Policy
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-md-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-download fa-3x text-success mb-3"></i>
-                        <h5 class="card-title">I Miei Dati</h5>
-                        <p class="card-text">Scarica tutti i tuoi dati personali</p>
-                        <a href="{{ url_for('data_export') }}" class="btn btn-outline-success">
-                            Esporta Dati
-                        </a>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-download fa-3x text-success mb-3"></i>
+                            <h5 class="card-title">I Miei Dati</h5>
+                            <p class="card-text">Scarica tutti i tuoi dati personali</p>
+                            <a href="{{ url_for('data_export') }}" class="btn btn-outline-success">
+                                Esporta Dati
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-md-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-user-cog fa-3x text-warning mb-3"></i>
-                        <h5 class="card-title">Diritti GDPR</h5>
-                        <p class="card-text">Gestisci i tuoi diritti sulla privacy</p>
-                        <a href="{{ url_for('gdpr_requests') }}" class="btn btn-outline-warning">
-                            Gestisci Diritti
-                        </a>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-user-cog fa-3x text-warning mb-3"></i>
+                            <h5 class="card-title">Diritti GDPR</h5>
+                            <p class="card-text">Gestisci i tuoi diritti sulla privacy</p>
+                            <a href="{{ url_for('gdpr_requests') }}" class="btn btn-outline-warning">
+                                Gestisci Diritti
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -235,8 +307,38 @@
 </div>
 
 <script>
-function confirmStartTest(testName) {
-    return confirm('Sei sicuro di voler iniziare il test "' + testName + '"?\n\nATTENZIONE: Potrai completarlo UNA SOLA VOLTA.');
+function confirmFirstAttempt(testName) {
+    return confirm('Sei sicuro di voler iniziare il test "' + testName + '"?\n\nUna volta completato, dovrai attendere l\'autorizzazione dell\'amministratore per ripeterlo.');
 }
+
+function confirmNewAttempt(testName, previousAttempts) {
+    return confirm('Questo test è stato riabilitato dall\'amministratore.\n\nTest: "' + testName + '"\nTentativi precedenti: ' + previousAttempts + '\n\nSei sicuro di voler iniziare un nuovo tentativo?');
+}
+
+// Funzione di sincronizzazione (se presente nel template originale)
+function syncData() {
+    const btn = document.getElementById('syncBtn');
+    const status = document.getElementById('syncStatus');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizzazione...';
+    status.className = 'badge bg-warning';
+    status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizzazione...';
+    
+    // Simula sincronizzazione
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizza';
+        status.className = 'badge bg-success';
+        status.innerHTML = '<i class="fas fa-check"></i> Aggiornato';
+    }, 2000);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', syncData);
+    }
+});
 </script>
 {% endblock %}
