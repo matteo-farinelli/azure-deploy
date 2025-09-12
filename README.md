@@ -364,6 +364,8 @@ consume_test_reset_flag(user_email, test_name)
 
 ### Problemi Comuni
 
+per qualsiasi problematica è sempre consigliabile di verificare i log di azure in "monitoraggio --> Flusso di registrazione"
+
 #### Connessione Azure Tables Fallita
 ```bash
 # Verifica la connection string
