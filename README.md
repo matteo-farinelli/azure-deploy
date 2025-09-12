@@ -4,13 +4,13 @@ Una piattaforma web per la gestione e somministrazione di test di valutazione az
 
 ## Panoramica del Progetto
 
-La piattaforma permette alle aziende del gruppo (Auxiell, Euxilia, XVA Services) di gestire utenti con autenticazione sicura basata su email aziendale, somministrare test dinamici caricati da file Excel, monitorare performance attraverso dashboard amministrative, generare report dettagliati e scalare automaticamente su infrastruttura Azure.
+La piattaforma permette alle aziende del gruppo (auxiell, euxilia, xva) di gestire utenti con autenticazione sicura basata su email aziendale, somministrare test dinamici caricati da file Excel, monitorare performance attraverso dashboard amministrative, generare report dettagliati e scalare automaticamente su infrastruttura Azure.
 
 ## Architettura
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  GitHub Actions │───▶│   Azure App      │───▶│  Azure Tables   │
+│  GitHub Actions │──▶│   Azure App      │───▶│  Azure Tables   │
 │   (CI/CD)       │    │   Service        │    │   Storage       │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │
