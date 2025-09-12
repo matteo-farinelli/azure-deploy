@@ -49,25 +49,6 @@
         </div>
     </div>
     
-    <!-- DEBUG: Rimuovi dopo aver risolto il problema -->
-    {% if available_tests %}
-    <div class="debug-box">
-        <strong>🔍 DEBUG - Test disponibili:</strong>
-        <ul class="mb-0 mt-2">
-            {% for test in available_tests %}
-            <li class="mb-1">
-                <strong>{{ test.name }}</strong>: 
-                <span class="badge bg-secondary">completed={{ test.completed }}</span>
-                <span class="badge bg-info">can_attempt={{ test.can_attempt }}</span>
-                <span class="badge bg-warning">attempts={{ test.attempts_count }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        <small class="text-muted">Rimuovi questo box dal template quando il problema è risolto</small>
-    </div>
-    {% endif %}
-    <!-- Fine DEBUG -->
-    
     <!-- Alert aggiornato per tentativi multipli -->
     <div class="alert alert-info mb-4">
         <i class="fas fa-info-circle me-2"></i>
