@@ -1982,7 +1982,114 @@ def quiz():
         session.modified = True
 
     return show_quiz()
+def apply_deduplication_filter(df):
+    """
+    Filtra le domande per evitare duplicati con le stesse opzioni di risposta.
+    Mantiene solo la prima occorrenza di ogni set unico di opzioni.
+    IGNORA le domande Vero/Falso che possono essere duplicate.
+    """
+    if df.empty:
+        return df
+    
+    try:
+        # Trova tutte le colonne opzione
+        option_cols = [col for col in df.columns if col.lower().strip().startswith("opzione")]
+        
+        if not option_cols:
+            logger.info("Nessuna colonna opzione trovata, filtro anti-duplicati saltato")
+            return df
+        
+        # Crea una signature per ogni domanda basata sulle opzioni
+        def create_options_signature(row):
+            """Crea un hash unico basato sulle opzioni della domanda, ignora Vero/Falso"""
+            options = []
+            
+            for col in option_cols:
+                option_value = row.get(col)
+                if pd.notna(option_value) and option_value is not None:
+                    # Normalizza il testo per confronto robusto
+                    normalized = str(option_value).strip().lower()
+                    if normalized:  # Solo se non vuoto
+                        options.append(normalized)
+            
+            if not options:
+                # Domanda aperta o senza opzioni - usa la domanda stessa come signature
+                return f"open_question_{str(row.get('Domanda', '')).strip().lower()}"
+            
+            # NUOVO: Controlla se è una domanda Vero/Falso
+            if is_true_false_question(options):
+                # Per domande Vero/Falso, usa la domanda stessa come signature
+                # così ogni domanda Vero/Falso è considerata unica
+                return f"true_false_{str(row.get('Domanda', '')).strip().lower()}"
+            
+            # Ordina le opzioni per rendere l'hash consistente
+            options.sort()
+            
+            # Crea hash delle opzioni
+            import hashlib
+            signature = hashlib.md5("|".join(options).encode()).hexdigest()
+            return signature
+        
+        # Aggiungi colonna temporanea con signature
+        df_with_signature = df.copy()
+        df_with_signature['_options_signature'] = df_with_signature.apply(create_options_signature, axis=1)
+        
+        # Log per debug
+        total_before = len(df_with_signature)
+        unique_signatures = df_with_signature['_options_signature'].nunique()
+        duplicates_count = total_before - unique_signatures
+        
+        # Conta domande Vero/Falso per info
+        true_false_count = sum(1 for sig in df_with_signature['_options_signature'] if sig.startswith('true_false_'))
+        
+        if duplicates_count > 0:
+            logger.info(f"Filtro anti-duplicati: trovate {duplicates_count} domande con opzioni duplicate")
+            logger.info(f"Domande Vero/Falso preservate: {true_false_count}")
+            
+            # Mostra alcuni esempi di duplicati per debug (escluse vero/falso)
+            duplicate_signatures = df_with_signature[
+                df_with_signature.duplicated('_options_signature', keep=False) & 
+                ~df_with_signature['_options_signature'].str.startswith('true_false_')
+            ]['_options_signature'].unique()
+            
+            for sig in duplicate_signatures[:3]:  # Mostra solo i primi 3 per non spammare i log
+                duplicate_rows = df_with_signature[df_with_signature['_options_signature'] == sig]
+                logger.debug(f"Signature {sig}: {len(duplicate_rows)} domande duplicate")
+                for _, row in duplicate_rows.head(2).iterrows():  # Mostra solo le prime 2
+                    logger.debug(f"  - Domanda: {row.get('Domanda', 'N/A')[:50]}...")
+        else:
+            logger.info(f"Nessun duplicato trovato. Domande Vero/Falso preservate: {true_false_count}")
+        
+        # Rimuovi duplicati mantenendo la prima occorrenza
+        df_deduped = df_with_signature.drop_duplicates(subset=['_options_signature'], keep='first')
+        
+        # Rimuovi la colonna temporanea
+        df_deduped = df_deduped.drop('_options_signature', axis=1)
+        
+        logger.info(f"Filtro anti-duplicati completato: {total_before} → {len(df_deduped)} domande")
+        
+        return df_deduped.reset_index(drop=True)
+        
+    except Exception as e:
+        logger.error(f"Errore nel filtro anti-duplicati: {e}")
+        # In caso di errore, ritorna il dataframe originale
+        return df
 
+
+def get_options_hash(row, option_cols):
+    """Helper function per creare hash delle opzioni (versione alternativa più semplice)"""
+    options = []
+    
+    for col in option_cols:
+        if col in row and pd.notna(row[col]) and str(row[col]).strip():
+            options.append(str(row[col]).strip().lower())
+    
+    if not options:
+        return None
+    
+    # Ordina e crea hash
+    options.sort()
+    return "|".join(options)
 def show_quiz():
     try:
         file_path = session.get("file_path", "")
@@ -1996,7 +2103,7 @@ def show_quiz():
 
         # Verifica colonne necessarie
         required_cols = ["Azienda", "principio", "Domanda", "Corretta", "opzione 1"]
-        missing = [col for col in required_cols if col not in df.columns]
+        missing = [col for col in required_cols if col not in required_cols]
         if missing:
             return render_template('error.html', error=f"Colonne mancanti: {', '.join(missing)}")
 
@@ -2011,7 +2118,12 @@ def show_quiz():
                 domande_selezionate = df_filtrato.reset_index(drop=True)
             else:
                 target_questions = 30  # Numero desiderato di domande
-                principi = df_filtrato["principio"].unique()
+                
+                # NUOVO: Applica filtro anti-duplicati PRIMA della selezione
+                df_filtered = apply_deduplication_filter(df_filtrato)
+                logger.info(f"Domande dopo filtro anti-duplicati: {len(df_filtered)} (erano {len(df_filtrato)})")
+                
+                principi = df_filtered["principio"].unique()
                 num_principi = len(principi)
                 
                 if num_principi > 0:
@@ -2019,23 +2131,24 @@ def show_quiz():
                     domande_per_principio = max(1, target_questions // num_principi)
                     
                     domande_selezionate = (
-                        df_filtrato.groupby("principio", group_keys=False)
+                        df_filtered.groupby("principio", group_keys=False)
                                    .apply(lambda x: x.sample(n=min(domande_per_principio, len(x)), random_state=42))
                                    .reset_index(drop=True)
                     )
                     
-                    # Se non abbiamo abbastanza domande, aggiungi altre random
+                    # Se non abbiamo abbastanza domande, aggiungi altre random (sempre dal df_filtered)
                     if len(domande_selezionate) < target_questions:
                         remaining = target_questions - len(domande_selezionate)
-                        unused = df_filtrato[~df_filtrato.index.isin(domande_selezionate.index)]
+                        unused = df_filtered[~df_filtered.index.isin(domande_selezionate.index)]
                         if len(unused) > 0:
                             extra = unused.sample(n=min(remaining, len(unused)), random_state=42)
                             domande_selezionate = pd.concat([domande_selezionate, extra]).reset_index(drop=True)
                 else:
-                    domande_selezionate = df_filtrato.reset_index(drop=True)
+                    domande_selezionate = df_filtered.reset_index(drop=True)
             
             session["domande_selezionate"] = domande_selezionate.to_dict('records')
 
+        # Resto della funzione rimane uguale...
         domande = session["domande_selezionate"]
         domande_formatted = []
         option_cols = [c for c in df.columns if c.lower().strip().startswith("opzione")]
