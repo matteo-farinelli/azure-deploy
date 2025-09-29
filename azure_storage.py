@@ -8,7 +8,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Configurazione Azure Storage
+# Configurazione Azure Storage.
 AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
 TABLE_NAME_USERS = 'users'
 TABLE_NAME_RESULTS = 'testresults'
