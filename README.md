@@ -243,7 +243,7 @@ curl https://your-app.azurewebsites.net/health
 | `answers_json` | String | Dettaglio risposte (JSON) |
 | `completed_at` | DateTime | Data completamento |
 
-### Tabella `testresats`
+### Tabella `testresets`
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
