@@ -1,29 +1,111 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+.progress-tracker {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+    z-index: 100;
+}
+
+.progress-tracker .progress {
+    height: 8px;
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+}
+
+.progress-tracker .progress-bar {
+    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.card.answered {
+    border-left: 4px solid #28a745 !important;
+    background-color: #f8fff9;
+}
+
+.card.unanswered {
+    border-left: 4px solid #ffc107;
+}
+
+.question-indicator {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #e9ecef;
+    line-height: 30px;
+    text-align: center;
+    margin-right: 5px;
+    transition: all 0.3s ease;
+}
+
+.question-indicator.completed {
+    background: #28a745;
+    color: white;
+}
+
+.sticky-top {
+    top: 20px;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-lg-8">
+            <!-- Progress Tracker - NUOVO -->
+            <div class="progress-tracker sticky-top">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">
+                        <i class="fas fa-clipboard-check me-2"></i>{{ test_name }}
+                    </h6>
+                    <span class="badge bg-info">{{ domande|length }} domande</span>
+                </div>
+                
+                <div class="progress">
+                    <div class="progress-bar" 
+                         id="quizProgress" 
+                         role="progressbar" 
+                         style="width: 0%" 
+                         aria-valuenow="0" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-check-circle text-success me-1"></i>
+                        <span id="answeredCount">0</span> / {{ domande|length }} risposte completate
+                    </small>
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="timeElapsed">0:00</span>
+                    </small>
+                </div>
+            </div>
+            
             <div class="dashboard-card">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
-                        <h2>{{ test_name }}</h2>
                         <p class="text-muted mb-0">
                             <i class="fas fa-building me-2"></i>{{ azienda }}
                         </p>
-                    </div>
-                    <div class="badge bg-info fs-6">
-                        {{ domande|length }} domande
                     </div>
                 </div>
                 
                 {% if not submitted %}
                     <form id="quizForm">
                         {% for domanda in domande %}
-                            <div class="card mb-4">
+                            <div class="card mb-4 unanswered" data-question-id="{{ domanda.id }}">
                                 <div class="card-header">
                                     <h5 class="mb-0">
-                                        <span class="badge bg-secondary me-2">{{ loop.index }}</span>
+                                        <span class="question-indicator" id="indicator-{{ domanda.id }}">{{ loop.index }}</span>
                                         {{ domanda.domanda }}
                                     </h5>
                                     <small class="text-muted">
@@ -32,10 +114,11 @@
                                 </div>
                                 <div class="card-body">
                                     {% if domanda.tipo == 'aperta' %}
-                                        <textarea class="form-control" 
+                                        <textarea class="form-control question-input" 
                                                   name="question_{{ domanda.id }}" 
                                                   rows="4" 
-                                                  placeholder="Inserisci la tua risposta..."></textarea>
+                                                  placeholder="Inserisci la tua risposta..."
+                                                  data-question-id="{{ domanda.id }}"></textarea>
                                     {% else %}
                                         {% if domanda.multiple %}
                                             <div class="alert alert-info">
@@ -44,11 +127,12 @@
                                             </div>
                                             {% for opzione in domanda.opzioni %}
                                                 <div class="form-check mb-2">
-                                                    <input class="form-check-input" 
+                                                    <input class="form-check-input question-input" 
                                                            type="checkbox" 
                                                            name="question_{{ domanda.id }}" 
                                                            value="{{ opzione }}" 
-                                                           id="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                           id="q{{ domanda.id }}_{{ loop.index0 }}"
+                                                           data-question-id="{{ domanda.id }}">
                                                     <label class="form-check-label" 
                                                            for="q{{ domanda.id }}_{{ loop.index0 }}">
                                                         {{ opzione }}
@@ -58,11 +142,12 @@
                                         {% else %}
                                             {% for opzione in domanda.opzioni %}
                                                 <div class="form-check mb-2">
-                                                    <input class="form-check-input" 
+                                                    <input class="form-check-input question-input" 
                                                            type="radio" 
                                                            name="question_{{ domanda.id }}" 
                                                            value="{{ opzione }}" 
-                                                           id="q{{ domanda.id }}_{{ loop.index0 }}">
+                                                           id="q{{ domanda.id }}_{{ loop.index0 }}"
+                                                           data-question-id="{{ domanda.id }}">
                                                     <label class="form-check-label" 
                                                            for="q{{ domanda.id }}_{{ loop.index0 }}">
                                                         {{ opzione }}
@@ -76,7 +161,7 @@
                         {% endfor %}
                         
                         <div class="text-center mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Invia Risposte
                             </button>
@@ -107,12 +192,160 @@
 
 {% block scripts %}
 <script>
+// ===== PROGRESS TRACKER FUNCTIONALITY =====
+let startTime = Date.now();
+let timerInterval;
+
+// Funzione per contare le risposte completate
+function getAnsweredCount() {
+    const answeredQuestions = new Set();
+    
+    // Conta domande con textarea compilate
+    document.querySelectorAll('textarea.question-input').forEach(textarea => {
+        if (textarea.value.trim() !== '') {
+            answeredQuestions.add(textarea.dataset.questionId);
+        }
+    });
+    
+    // Conta domande con radio selezionati
+    document.querySelectorAll('input[type="radio"].question-input:checked').forEach(radio => {
+        answeredQuestions.add(radio.dataset.questionId);
+    });
+    
+    // Conta domande con checkbox selezionati (almeno uno)
+    const checkboxGroups = {};
+    document.querySelectorAll('input[type="checkbox"].question-input').forEach(checkbox => {
+        const qId = checkbox.dataset.questionId;
+        if (!checkboxGroups[qId]) {
+            checkboxGroups[qId] = false;
+        }
+        if (checkbox.checked) {
+            checkboxGroups[qId] = true;
+        }
+    });
+    
+    Object.keys(checkboxGroups).forEach(qId => {
+        if (checkboxGroups[qId]) {
+            answeredQuestions.add(qId);
+        }
+    });
+    
+    return answeredQuestions.size;
+}
+
+// Funzione per aggiornare la progress bar
+function updateProgress() {
+    const total = {{ domande|length }};
+    const answered = getAnsweredCount();
+    const percent = (answered / total) * 100;
+    
+    const progressBar = document.getElementById('quizProgress');
+    const answeredCountSpan = document.getElementById('answeredCount');
+    
+    progressBar.style.width = percent + '%';
+    progressBar.setAttribute('aria-valuenow', percent);
+    answeredCountSpan.textContent = answered;
+    
+    // Cambia colore in base al completamento
+    if (percent === 100) {
+        progressBar.style.background = 'linear-gradient(90deg, #28a745, #20c997)';
+    } else if (percent >= 50) {
+        progressBar.style.background = 'linear-gradient(90deg, #ffc107, #fd7e14)';
+    } else {
+        progressBar.style.background = 'linear-gradient(90deg, #dc3545, #c82333)';
+    }
+}
+
+// Funzione per marcare domanda come risposta
+function markQuestionAsAnswered(questionId) {
+    const card = document.querySelector(`[data-question-id="${questionId}"]`);
+    const indicator = document.getElementById(`indicator-${questionId}`);
+    
+    if (card && indicator) {
+        card.classList.remove('unanswered');
+        card.classList.add('answered');
+        indicator.classList.add('completed');
+    }
+}
+
+// Funzione per rimuovere marker risposta
+function markQuestionAsUnanswered(questionId) {
+    const card = document.querySelector(`[data-question-id="${questionId}"]`);
+    const indicator = document.getElementById(`indicator-${questionId}`);
+    
+    if (card && indicator) {
+        card.classList.remove('answered');
+        card.classList.add('unanswered');
+        indicator.classList.remove('completed');
+    }
+}
+
+// Timer per tempo trascorso
+function updateTimer() {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    
+    document.getElementById('timeElapsed').textContent = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Inizializza event listeners
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('quizForm');
     
     if (form) {
+        // Avvia timer
+        timerInterval = setInterval(updateTimer, 1000);
+        
+        // Listener per textarea
+        document.querySelectorAll('textarea.question-input').forEach(textarea => {
+            textarea.addEventListener('input', function() {
+                const questionId = this.dataset.questionId;
+                if (this.value.trim() !== '') {
+                    markQuestionAsAnswered(questionId);
+                } else {
+                    markQuestionAsUnanswered(questionId);
+                }
+                updateProgress();
+            });
+        });
+        
+        // Listener per radio buttons
+        document.querySelectorAll('input[type="radio"].question-input').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const questionId = this.dataset.questionId;
+                markQuestionAsAnswered(questionId);
+                updateProgress();
+            });
+        });
+        
+        // Listener per checkbox
+        document.querySelectorAll('input[type="checkbox"].question-input').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const questionId = this.dataset.questionId;
+                
+                // Controlla se almeno un checkbox è selezionato
+                const checkboxes = document.querySelectorAll(
+                    `input[type="checkbox"][data-question-id="${questionId}"]`
+                );
+                const hasChecked = Array.from(checkboxes).some(cb => cb.checked);
+                
+                if (hasChecked) {
+                    markQuestionAsAnswered(questionId);
+                } else {
+                    markQuestionAsUnanswered(questionId);
+                }
+                updateProgress();
+            });
+        });
+        
+        // Submit handler
         form.addEventListener('submit', function(e) {
             e.preventDefault();
+            
+            // Ferma timer
+            clearInterval(timerInterval);
             
             // Raccolta risposte
             const formData = new FormData(form);
@@ -137,8 +370,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const answeredQuestions = Object.keys(answers).length;
             
             if (answeredQuestions < totalQuestions) {
-                alert('Rispondi a tutte le domande prima di inviare.');
-                return;
+                if (!confirm(`Hai risposto a ${answeredQuestions} domande su ${totalQuestions}. Vuoi davvero inviare?`)) {
+                    return;
+                }
             }
             
             const submitData = {
@@ -152,9 +386,9 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             // Disabilita form
-            const submitBtn = form.querySelector('button[type="submit"]');
+            const submitBtn = document.getElementById('submitBtn');
             const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Invio...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Invio in corso...';
             submitBtn.disabled = true;
             
             // Invia
@@ -178,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="alert alert-success">
                             <h4><i class="fas fa-check-circle me-2"></i>Test Completato!</h4>
                             <p>Punteggio: <strong>${data.score}%</strong> (${data.correct}/${data.total} corrette)</p>
+                            <p class="mb-0"><small>Tempo impiegato: ${document.getElementById('timeElapsed').textContent}</small></p>
                         </div>
                         <div class="mt-3">
                             <a href="/download_results" class="btn btn-success me-2">
@@ -190,6 +425,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;
                     
                     document.querySelector('.dashboard-card').appendChild(successDiv);
+                    
+                    // Nascondi progress tracker
+                    document.querySelector('.progress-tracker').style.display = 'none';
                 } else {
                     alert('Errore: ' + data.error);
                     if (data.reload) {
@@ -199,13 +437,25 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Errore:', error);
-                alert('Errore di connessione.');
+                alert('Errore di connessione. Riprova.');
             })
             .finally(() => {
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
             });
         });
+        
+        // Inizializza progress all'avvio
+        updateProgress();
+    }
+});
+
+// Previeni perdita dati
+window.addEventListener('beforeunload', function(e) {
+    if (document.getElementById('quizForm') && getAnsweredCount() > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+        return 'Hai risposte non salvate. Sei sicuro di voler uscire?';
     }
 });
 </script>
