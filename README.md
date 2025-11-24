@@ -40,7 +40,6 @@ La piattaforma permette alle aziende del gruppo (auxiell, euxilia, xva) di gesti
 - GitHub Actions per CI/CD automatizzato
 
 ## Funzionalità Principali
-
 ### Autenticazione e Gestione Utenti
 Il sistema include registrazione automatica basata su email aziendale, login sicuro con hash SHA-256, account amministratore per ogni azienda e gestione sessioni con timeout configurabile.
 
