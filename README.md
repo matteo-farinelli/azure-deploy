@@ -37,7 +37,7 @@ La piattaforma permette alle aziende del gruppo (auxiell, euxilia, xva) di gesti
 **Infrastruttura:**
 - Azure App Service per l'hosting dell'applicazione
 - Azure Table Storage per la persistenza dei dati
-- GitHub Actions per CI/CD automatizzato
+- GitHub Actions per CI/CD automatizzato 
 
 ## Funzionalità Principali
 ### Autenticazione e Gestione Utenti
